@@ -1,0 +1,59 @@
+[project]
+name = 'embedex'
+version = '0.0.1'
+description = 'Learnable embeddings of higher-order objects, such as distributions and functions.'
+readme = 'README.md'
+requires-python = '>=3.13,<3.14'
+dependencies = [
+    'distrax>=0.1.7',
+    'equinox>=0.13.5',
+    'jax>=0.9.1',
+    'matplotlib>=3.10.8',
+    'minfx>=0.7.1',
+    'numpy>=2.4.2',
+    'optax>=0.2.7',
+    'pyyaml>=6.0.3',
+    'scipy>=1.17.1',
+    'seaborn>=0.13.2',
+    'tqdm>=4.67.3',
+]
+
+[project.optional-dependencies]
+gpu = [
+    'jax[cuda12]>=0.9.1',
+]
+dev = [
+    'pre-commit>=4.5.1',
+    'pytest>=9.0.2',
+    'ruff>=0.15.5',
+]
+
+[build-system]
+requires = ['setuptools', 'wheel']
+build-backend = 'setuptools.build_meta'
+
+[tool.setuptools.packages.find]
+include = ['embedex*']
+
+[tool.ruff]
+indent-width = 4
+line-length = 100
+target-version = 'py313'
+
+[tool.ruff.format]
+quote-style = 'single'
+indent-style = 'space'
+
+[tool.ruff.lint]
+select = [
+    'E',  # pycodestyle
+    'F',  # pyflakes
+    'UP',  # pyupgrade
+    'B',  # flake8-bugbear
+    'SIM',  # flake8-simplify
+    'I',  # isort
+]
+ignore = [
+    'E501',  # line too long
+    'E731',  # do not assign a lambda expression
+]
