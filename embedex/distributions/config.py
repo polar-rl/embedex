@@ -1,0 +1,74 @@
+"""Config dataclasses for distribution embedding models and training."""
+
+from dataclasses import dataclass, field
+from typing import Literal
+
+
+@dataclass
+class EmbeddingConfig:
+    block_type: Literal['pointwise', 'set_transformer'] = 'pointwise'
+    embedding_dim: int = 8
+    hidden_size: int = 64
+    num_layers: int = 3
+    num_rounds: int = 3
+    # Set Transformer specific
+    num_heads: int = 4
+    num_inducing: int = 16
+
+
+@dataclass
+class GeneratorConfig:
+    flow_type: Literal['nf', 'fm', 'dfm'] = 'nf'
+    conditioning: Literal['concat', 'film', 'hyper'] = 'concat'
+    # Normalizing Flow
+    nf_condition_dequant: bool = True
+    nf_dequant_hidden_size: int = 64
+    nf_dequant_num_layers: int = 2
+    nf_hidden_size: int = 32
+    nf_num_layers: int = 3
+    nf_num_coupling_layers: int = 8
+    nf_num_flow_params: int = 5
+    # Flow Matching
+    fm_time_embed_dim: int = 16
+    fm_hidden_size: int = 128
+    fm_num_layers: int = 4
+    fm_num_steps: int = 100
+    fm_sigma_min: float = 1e-4
+    # Discrete Flow Matching
+    dfm_num_classes: int = 10
+    dfm_hidden_size: int = 128
+    dfm_num_layers: int = 4
+    dfm_time_embed_dim: int = 16
+    dfm_num_steps: int = 100
+    dfm_denoiser: Literal['mlp', 'attention'] = 'mlp'
+    dfm_attn_token_dim: int = 64
+    dfm_attn_num_heads: int = 4
+    dfm_attn_num_layers: int = 4
+    dfm_attn_ff_multiplier: int = 4
+    dfm_attn_num_cond_tokens: int = 0  # 0 = auto-infer from conditioning_dim
+
+
+@dataclass
+class ModelConfig:
+    input_dim: int = 2
+    output_dim: int = 2
+    embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
+    generator: GeneratorConfig = field(default_factory=GeneratorConfig)
+
+
+@dataclass
+class TrainingConfig:
+    # Optimization
+    learning_rate: float = 1e-3
+    end_learning_rate: float = 1e-5
+    warmup_steps: int = 0
+    clip_grad_norm: float | None = None  # optax.clip_by_global_norm threshold (None = off)
+    # Training loop
+    num_iterations: int = 30000
+    batch_size: int = 32
+    num_samples: int = 128
+    # Logging and checkpointing
+    log_interval: int = 100
+    checkpoint_interval: int = 1000
+    # Misc
+    seed: int = 0
