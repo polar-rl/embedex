@@ -45,7 +45,7 @@ class Dequantize(Flow):
         log_s = jnp.clip(log_s, -5.0, 3.0)
         s = jnp.exp(log_s)
 
-        eps = jax.random.logistic(key, shape=(d,))
+        eps = jax.random.logistic(key, (d,))
         v = mu + s * eps
         v = jnp.clip(v, -5.0, 5.0)
 

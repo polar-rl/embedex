@@ -1,0 +1,35 @@
+model:
+  embedding:
+    block_type: set_transformer
+    embedding_dim: 16
+    hidden_size: 64
+    num_rounds: 3
+    num_heads: 4
+    num_inducing: 16
+  generator:
+    flow_type: fm
+    conditioning: concat
+    fm_time_embed_dim: 16
+    fm_hidden_size: 128
+    fm_num_layers: 4
+    fm_num_steps: 100
+    fm_sigma_min: 1e-4
+
+training:
+  learning_rate: 1e-3
+  num_iterations: 100000
+  batch_size: 32
+  num_samples: 128
+  seed: 0
+
+experiments:
+  width_analysis: true
+  interpolation: true
+  linear_functionals: true
+  gaussian_ood: true
+  property_directions: true
+  embedding_visualization: true
+  compositional: true
+
+run_name: flow_matching
+seed: 0

@@ -275,7 +275,7 @@ class ParameterizedAffine(Flow):
         key: jax.Array | None = None,
     ) -> tuple[jax.Array, jax.Array]:
         assert params is not None or self.params is not None, 'No parameters provided'
-        params = cast(jnp.ndarray, params if params is not None else self.params)
+        params = cast(jax.Array, params if params is not None else self.params)
         a, b = params[:2]
 
         scale = jax.nn.softplus(self.scale)
@@ -295,7 +295,7 @@ class ParameterizedAffine(Flow):
         key: jax.Array | None = None,
     ) -> tuple[jax.Array, jax.Array]:
         assert params is not None or self.params is not None, 'No parameters provided'
-        params = cast(jnp.ndarray, params if params is not None else self.params)
+        params = cast(jax.Array, params if params is not None else self.params)
         a, b = params[:2]
 
         scale = jax.nn.softplus(self.scale)
@@ -326,7 +326,7 @@ class ParameterizedHinge(Flow):
         key: jax.Array | None = None,
     ) -> tuple[jax.Array, jax.Array]:
         assert params is not None or self.params is not None, 'No parameters provided'
-        params = cast(jnp.ndarray, params if params is not None else self.params)
+        params = cast(jax.Array, params if params is not None else self.params)
 
         scale = jax.nn.softplus(self.scale)
         a, b = list(jnp.tanh(params[:2] / scale) * scale)
@@ -345,7 +345,7 @@ class ParameterizedHinge(Flow):
         key: jax.Array | None = None,
     ) -> tuple[jax.Array, jax.Array]:
         assert params is not None or self.params is not None, 'No parameters provided'
-        params = cast(jnp.ndarray, params if params is not None else self.params)
+        params = cast(jax.Array, params if params is not None else self.params)
 
         scale = jax.nn.softplus(self.scale)
         a, b = list(jnp.tanh(params[:2] / scale) * scale)
@@ -378,7 +378,7 @@ class ParameterizedNLSq(Flow):
 
     def _get_params(self, params: jax.Array | None = None) -> tuple[jax.Array, ...]:
         assert params is not None or self.params is not None, 'No parameters provided'
-        params = cast(jnp.ndarray, params if params is not None else self.params)
+        params = cast(jax.Array, params if params is not None else self.params)
         _a, _b, _c, _d, _f = params[:5]
 
         scale_b = jax.nn.softplus(self.scale_b)

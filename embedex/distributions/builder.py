@@ -404,7 +404,7 @@ def create_conditioned_mlp(
 
 
 def count_parameters(model: eqx.Module) -> int:
-    leaves = jax.tree_util.tree_leaves(eqx.filter(model, eqx.is_inexact_array))
+    leaves = jax.tree.leaves(eqx.filter(model, eqx.is_inexact_array))
     return sum(leaf.size for leaf in leaves)
 
 
@@ -414,14 +414,13 @@ def count_parameters(model: eqx.Module) -> int:
 
 
 def save_ckpt(model: eqx.Module, cfg: Any, step: int) -> str:
-    cfg_dict = asdict(cfg) if not isinstance(cfg, dict) else cfg
-    ckpt_dir = os.path.join(cfg_dict['experiment']['model_dir'], cfg_dict['experiment']['run_name'])
-    num_steps = cfg_dict['training'].get('num_iterations', 1)
+    ckpt_dir = os.path.join(cfg.model_dir, cfg.run_name)
+    num_steps = cfg.training.num_iterations
     ckpt_path = os.path.join(ckpt_dir, f'{step:0{len(str(num_steps))}}.eqx')
     os.makedirs(ckpt_dir, exist_ok=True)
 
     with open(ckpt_path, 'wb') as f:
-        f.write((json.dumps(cfg_dict) + '\n').encode())
+        f.write((json.dumps(asdict(cfg)) + '\n').encode())
         eqx.tree_serialise_leaves(f, model)
 
     return ckpt_path

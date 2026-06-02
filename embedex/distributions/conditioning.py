@@ -161,8 +161,8 @@ def batch_layer_norm(tokens: jax.Array, norm: eqx.nn.LayerNorm) -> jax.Array:
     `eqx.nn.LayerNorm` instance, avoiding Equinox pytree-tracing overhead.
     """
 
-    mean = tokens.mean(axis=-1, keepdims=True)
-    var = tokens.var(axis=-1, keepdims=True)
+    mean = tokens.mean(keepdims=True, axis=-1)
+    var = tokens.var(keepdims=True, axis=-1)
     h = (tokens - mean) / jnp.sqrt(var + norm.eps)
     if norm.use_weight:
         h = h * norm.weight

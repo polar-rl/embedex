@@ -1,0 +1,29 @@
+model:
+  embedding:
+    embedding_dim: 16
+    hidden_size: 128
+    num_layers: 3
+    num_rounds: 1
+  generator:
+    nf_hidden_size: 32
+    nf_num_layers: 3
+    nf_num_coupling_layers: 8
+
+training:
+  learning_rate: 1e-3
+  num_iterations: 100000
+  batch_size: 32
+  num_samples: 128
+  seed: 0
+
+experiments:
+  width_analysis: true
+  interpolation: true
+  linear_functionals: true
+  gaussian_ood: true
+  property_directions: true
+  embedding_visualization: true
+  compositional: true
+
+run_name: baseline
+seed: 0

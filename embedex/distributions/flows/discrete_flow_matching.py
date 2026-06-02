@@ -90,7 +90,7 @@ class AttentionDenoiserNet(eqx.Module):
     cond_token_proj: eqx.nn.Linear
     cond_time_proj: eqx.nn.Linear
     cond_global_proj: eqx.nn.Linear
-    cond_pos_embeddings: jnp.ndarray
+    cond_pos_embeddings: jax.Array
     blocks: tuple[CrossAttentionBlock, ...]
     final_norm: eqx.nn.LayerNorm
     output_proj: eqx.nn.Linear
@@ -180,10 +180,10 @@ class DiscreteFlowMatchingModel(flowee.Flow):
         """
 
         mask_key, noise_key = jax.random.split(key, 2)
-        keep = jax.random.uniform(mask_key, shape=(self.num_variables,)) < t
+        keep = jax.random.uniform(mask_key, (self.num_variables,)) < t
         noise = jax.random.randint(
             noise_key,
-            shape=(self.num_variables,),
+            (self.num_variables,),
             minval=0,
             maxval=self.num_classes,
         )
@@ -281,7 +281,7 @@ class DiscreteFlowMatchingModel(flowee.Flow):
         init_key, scan_key = jax.random.split(key, 2)
         x_t = jax.random.randint(
             init_key,
-            shape=(self.num_variables,),
+            (self.num_variables,),
             minval=0,
             maxval=self.num_classes,
         )
