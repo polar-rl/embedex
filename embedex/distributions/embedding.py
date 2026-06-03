@@ -265,12 +265,33 @@ class DistributionEmbedding(eqx.Module):
 
 class FlowEmbedding(DistributionEmbedding):
     def log_prob(
-        self, xs: jax.Array, z: jax.Array, key: jax.Array | None = None
+        self,
+        xs: jax.Array,
+        z: jax.Array,
+        key: jax.Array | None = None,
+        reps: int = 1,
     ) -> tuple[jax.Array, jax.Array, jax.Array]:
+        """Log-probability of each row of `xs` under the embedded distribution.
+
+        When the generator's `log_prob` is stochastic (e.g. dequantization noise
+        in a normalizing flow), `reps > 1` runs that many independent passes and
+        averages them in probability space (`logsumexp` over reps minus
+        `log reps`), giving a lower-variance estimate.
+        """
+
         if key is None:
             return jax.vmap(self.generator.log_prob, in_axes=(0, None, None, None))(
                 xs, z, None, None
             )
 
-        keys = jax.random.split(key, xs.shape[0])
-        return jax.vmap(self.generator.log_prob, in_axes=(0, None, None, 0))(xs, z, None, keys)
+        if reps <= 1:
+            keys = jax.random.split(key, xs.shape[0])
+            return jax.vmap(self.generator.log_prob, in_axes=(0, None, None, 0))(xs, z, None, keys)
+
+        def one_pass(rep_key: jax.Array) -> tuple[jax.Array, jax.Array, jax.Array]:
+            keys = jax.random.split(rep_key, xs.shape[0])
+            return jax.vmap(self.generator.log_prob, in_axes=(0, None, None, 0))(xs, z, None, keys)
+
+        log_prob_x, log_prob_z, ldj = jax.vmap(one_pass)(jax.random.split(key, reps))
+        log_prob_x = jax.nn.logsumexp(log_prob_x, axis=0) - jnp.log(reps)
+        return log_prob_x, jnp.mean(log_prob_z, axis=0), jnp.mean(ldj, axis=0)

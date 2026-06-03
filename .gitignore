@@ -14,3 +14,6 @@ figures
 *.pdf
 *.zip
 .DS_Store
+
+models/
+figures/

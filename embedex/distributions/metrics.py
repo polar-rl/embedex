@@ -25,3 +25,16 @@ def sliced_wasserstein_distance(
     proj_y = jnp.sort(proj_y, axis=0)
 
     return jnp.sqrt(jnp.mean((proj_x - proj_y) ** 2))
+
+
+def js_divergence(p: jax.Array, q: jax.Array) -> jax.Array:
+    """Jensen-Shannon divergence between two PMFs over the same support."""
+
+    eps = 1e-12
+    p = (p + eps) / jnp.sum(p + eps)
+    q = (q + eps) / jnp.sum(q + eps)
+    m = 0.5 * (p + q)
+    kl_pm = jnp.sum(p * jnp.log(p / m))
+    kl_qm = jnp.sum(q * jnp.log(q / m))
+    result = 0.5 * kl_pm + 0.5 * kl_qm
+    return jnp.where(jnp.isfinite(result), result, 1.0)

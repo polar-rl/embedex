@@ -1,0 +1,37 @@
+model:
+  embedding:
+    block_type: set_transformer
+    embedding_dim: 16
+    hidden_size: 64
+    num_rounds: 3
+    num_heads: 4
+    num_inducing: 16
+  generator:
+    flow_type: nf
+    conditioning: concat
+    nf_condition_dequant: true
+    nf_dequant_hidden_size: 104
+    nf_dequant_num_layers: 3
+    nf_hidden_size: 50
+    nf_num_layers: 3
+    nf_num_coupling_layers: 8
+
+training:
+  learning_rate: 1e-3
+  num_iterations: 50000
+  batch_size: 32
+  num_samples: 128
+  seed: 0
+
+distribution:
+  num_spins: 12
+  coupling_scale: 1.0
+  bias_scale: 0.5
+
+evaluation:
+  num_distributions: 256
+  num_embedding_samples: 128
+  num_logprob_evals: 8
+
+run_name: nf_dequant
+seed: 0
