@@ -63,7 +63,6 @@ def create_width_analysis_plot(
     ax.grid(True)
 
     save_figure(fig, os.path.join(save_path, 'width_analysis.pdf'))
-    plt.close(fig)
 
 
 def run_width_analysis(

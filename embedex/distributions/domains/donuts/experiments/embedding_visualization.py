@@ -41,18 +41,18 @@ def run_embedding_visualization(
     # Guard against collapsed embeddings (e.g. variational posterior collapse)
     if np.std(embeddings_np) < 1e-8:
         print('  Warning: embeddings have near-zero variance — skipping visualization')
-        return
+        return None
 
-    radii = np.array(donuts.radius)
-    widths = np.array(donuts.width)
     mean_x = np.array(donuts.mean[:, 0])
     mean_y = np.array(donuts.mean[:, 1])
+    radii = np.array(donuts.radius)
+    widths = np.array(donuts.width)
 
     properties = [
-        ('radius', 'Radius', radii, 'coolwarm'),
-        ('width', 'Width', widths, 'coolwarm'),
         ('mean_x', 'Mean X', mean_x, 'coolwarm'),
         ('mean_y', 'Mean Y', mean_y, 'coolwarm'),
+        ('radius', 'Radius', radii, 'coolwarm'),
+        ('width', 'Width', widths, 'coolwarm'),
     ]
 
     print('  Computing t-SNE...')
@@ -79,9 +79,7 @@ def run_embedding_visualization(
         plt.colorbar(sc, ax=axes[i], fraction=0.046, pad=0.04)
 
     fig.suptitle('t-SNE of Donut Embeddings', fontsize=14)
-    fig.tight_layout()
     save_figure(fig, os.path.join(save_path, 'embedding_tsne.pdf'))
-    plt.close(fig)
 
     print('  Computing PCA...')
     pca = PCA(n_components=2)
@@ -106,9 +104,7 @@ def run_embedding_visualization(
         plt.colorbar(sc, ax=axes[i], fraction=0.046, pad=0.04)
 
     fig.suptitle('PCA of Donut Embeddings', fontsize=14)
-    fig.tight_layout()
     save_figure(fig, os.path.join(save_path, 'embedding_pca.pdf'))
-    plt.close(fig)
 
     num_components = min(4, embeddings_np.shape[1])
     pca_full = PCA(n_components=num_components)
@@ -143,6 +139,4 @@ def run_embedding_visualization(
                 pair_idx += 1
 
         fig.suptitle(f'PCA Pairs — colored by {prop_name}', fontsize=14)
-        fig.tight_layout()
         save_figure(fig, os.path.join(save_path, f'embedding_pca_pairs_{slug}.pdf'))
-        plt.close(fig)

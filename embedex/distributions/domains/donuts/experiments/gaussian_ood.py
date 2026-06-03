@@ -9,7 +9,7 @@ from matplotlib.figure import Figure
 
 from embedex.distributions.domains.donuts.config import ExperimentConfig
 from embedex.distributions.embedding import FlowEmbedding
-from embedex.distributions.utils import save_figure
+from embedex.distributions.utils import plot_model_density, save_figure
 
 
 def create_ood_comparison_plot(
@@ -46,14 +46,7 @@ def create_ood_comparison_plot(
         axes[0, i].grid(True)
 
         # Plot generated samples (bottom row)
-        seaborn.kdeplot(
-            {'x': np.array(generated[:, 0]), 'y': np.array(generated[:, 1])},
-            x='x',
-            y='y',
-            fill=True,
-            alpha=0.3,
-            ax=axes[1, i],
-        )
+        plot_model_density(model, embedding, axes[1, i], (-3, 3), (-3, 3), cmap='Oranges')
         axes[1, i].scatter(generated[:, 0], generated[:, 1], s=5, alpha=0.3, color='orange')
         axes[1, i].set_title('Generated')
         axes[1, i].set_xlim(-3, 3)
@@ -64,7 +57,6 @@ def create_ood_comparison_plot(
     axes[1, 0].set_ylabel('Model Output')
 
     fig.suptitle(title, fontsize=14)
-    fig.tight_layout()
 
     return fig, axes
 
@@ -99,8 +91,8 @@ def run_gaussian_ood(
         'Out-of-Distribution: Gaussians',
         single_key,
     )
+
     save_figure(fig, os.path.join(save_path, 'gaussian_ood_single.pdf'))
-    plt.close(fig)
 
     mixture_params = [
         [
@@ -143,5 +135,5 @@ def run_gaussian_ood(
         'Out-of-Distribution: Gaussian Mixtures',
         mixture_key,
     )
+
     save_figure(fig, os.path.join(save_path, 'gaussian_ood_mixtures.pdf'))
-    plt.close(fig)

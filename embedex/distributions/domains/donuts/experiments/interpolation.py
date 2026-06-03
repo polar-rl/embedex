@@ -3,13 +3,11 @@ import os
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
-import numpy as np
-import seaborn
 
 from embedex.distributions.domains.donuts.config import ExperimentConfig
 from embedex.distributions.domains.donuts.donut import Donut, sample_batch
 from embedex.distributions.embedding import FlowEmbedding
-from embedex.distributions.utils import save_figure
+from embedex.distributions.utils import plot_model_density, save_figure
 
 
 def run_interpolation(
@@ -33,8 +31,7 @@ def run_interpolation(
     start = sample_batch(donuts, config.interpolation_num_samples, sample_key)
 
     num_steps = config.interpolation_num_steps
-    weights = jnp.ones(start.shape[1])
-    zs = jax.vmap(model.embed, in_axes=(0, None))(start, weights)
+    zs = jax.vmap(model.embed, in_axes=(0, None))(start, jnp.ones(start.shape[1]))
     zs = jnp.concatenate(
         (
             zs[0][0:1],
@@ -49,12 +46,6 @@ def run_interpolation(
         )
     )
 
-    key, gen_key = jax.random.split(key, 2)
-    generate_keys = jax.random.split(gen_key, zs.shape[0])
-    xs = jax.vmap(model.generate, in_axes=(0, None))(
-        zs, config.interpolation_num_samples, key=generate_keys
-    )
-
     fig = plt.figure()
     fig.set_figwidth(16)
 
@@ -62,14 +53,7 @@ def run_interpolation(
     for i in range(total_plots):
         ax = plt.subplot(1, total_plots, i + 1)
 
-        seaborn.kdeplot(
-            {'x': np.array(xs[i, :, 0]), 'y': np.array(xs[i, :, 1])},
-            x='x',
-            y='y',
-            fill=True,
-            alpha=0.3,
-        )
-
+        plot_model_density(model, zs[i], ax, (-1.5, 1.5), (-2.5, 2.5))
         ax.set_ylim(-2.5, 2.5)
         ax.set_xlim(-1.5, 1.5)
         ax.set_xlabel(None)
@@ -77,4 +61,3 @@ def run_interpolation(
         ax.grid(True)
 
     save_figure(fig, os.path.join(save_path, 'interpolation.pdf'))
-    plt.close(fig)

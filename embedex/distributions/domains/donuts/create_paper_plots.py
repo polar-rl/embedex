@@ -102,10 +102,8 @@ def generate_paper_plots(
     xlims = ax.get_xlim()
     ylims = ax.get_ylim()
     save_figure(fig, os.path.join(save_path, 'donuts_example.pdf'))
-    plt.close(fig)
 
     print('Generating density plots...')
     true_samples = sample_batch(PAPER_DONUTS, 256, density_key)
     fig, _ = create_density_contours_plot(model, true_samples, xlims, ylims, config)
     save_figure(fig, os.path.join(save_path, 'donuts_densities.pdf'))
-    plt.close(fig)

@@ -3,13 +3,11 @@ import os
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
-import numpy as np
-import seaborn
 
 from embedex.distributions.domains.donuts.config import ExperimentConfig
 from embedex.distributions.domains.donuts.donut import Donut, sample_batch
 from embedex.distributions.embedding import FlowEmbedding
-from embedex.distributions.utils import save_figure
+from embedex.distributions.utils import plot_model_density, save_figure
 
 
 def _compute_direction(
@@ -126,14 +124,7 @@ def run_property_directions(
             axes[0, i].set_aspect('equal')
             axes[0, i].grid(True)
 
-            seaborn.kdeplot(
-                {'x': np.array(generated[:, 0]), 'y': np.array(generated[:, 1])},
-                x='x',
-                y='y',
-                fill=True,
-                alpha=0.5,
-                ax=axes[1, i],
-            )
+            plot_model_density(model, z_perturbed, axes[1, i], (-4.5, 4.5), (-4.5, 4.5))
             axes[1, i].set_xlim(-4.5, 4.5)
             axes[1, i].set_ylim(-4.5, 4.5)
             axes[1, i].set_aspect('equal')
@@ -143,7 +134,4 @@ def run_property_directions(
         axes[1, 0].set_ylabel('Density')
 
         fig.suptitle(f'Property Direction: {dir_name}', fontsize=14)
-        fig.tight_layout()
-
         save_figure(fig, os.path.join(save_path, f'property_direction_{slug}.pdf'))
-        plt.close(fig)

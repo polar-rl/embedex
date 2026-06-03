@@ -5,13 +5,11 @@ import jax
 import jax.numpy as jnp
 import matplotlib.lines as mlines
 import matplotlib.pyplot as plt
-import numpy as np
-import seaborn
 
 from embedex.distributions.domains.donuts.config import ExperimentConfig
 from embedex.distributions.domains.donuts.donut import Donut, sample_batch
 from embedex.distributions.embedding import FlowEmbedding
-from embedex.distributions.utils import save_figure
+from embedex.distributions.utils import plot_model_density, save_figure
 
 BASE = {'mean_x': 0.0, 'mean_y': 0.0, 'radius': 1.0, 'width': 0.25}
 PROPERTIES = {
@@ -77,83 +75,41 @@ def run_compositional(
             f'(‖z_D‖ = {l2_true:.4f})  cos sim = {cos_sim:.4f}'
         )
 
-        key, gen_true_key, gen_pred_key = jax.random.split(key, 3)
-        samples_d_true = model.generate(z_d, config.compositional_num_samples, key=gen_true_key)
-        samples_d_pred = model.generate(z_d_hat, config.compositional_num_samples, key=gen_pred_key)
-
-        key, gen_a_key, gen_b_key, gen_c_key = jax.random.split(key, 4)
-        samples_a = model.generate(z_a, config.compositional_num_samples, key=gen_a_key)
-        samples_b = model.generate(z_b, config.compositional_num_samples, key=gen_b_key)
-        samples_c = model.generate(z_c, config.compositional_num_samples, key=gen_c_key)
-
         fig, axes = plt.subplots(2, 3, figsize=(15, 10))
 
-        all_samples = [
-            (samples_a, f'A: {p1_name}↓ {p2_name}↓'),
-            (samples_b, f'B: {p1_name}↑ {p2_name}↓'),
-            (samples_c, f'C: {p1_name}↓ {p2_name}↑'),
+        top_row = [
+            (z_a, f'A: {p1_name}↓ {p2_name}↓'),
+            (z_b, f'B: {p1_name}↑ {p2_name}↓'),
+            (z_c, f'C: {p1_name}↓ {p2_name}↑'),
         ]
 
-        for i, (samp, title) in enumerate(all_samples):
-            seaborn.kdeplot(
-                {'x': np.array(samp[:, 0]), 'y': np.array(samp[:, 1])},
-                x='x',
-                y='y',
-                fill=True,
-                alpha=0.5,
-                ax=axes[0, i],
-            )
+        for i, (z, title) in enumerate(top_row):
+            plot_model_density(model, z, axes[0, i], (-4.5, 4.5), (-4.5, 4.5))
             axes[0, i].set_title(title)
             axes[0, i].set_xlim(-4.5, 4.5)
             axes[0, i].set_ylim(-4.5, 4.5)
             axes[0, i].set_aspect('equal')
             axes[0, i].grid(True)
 
-        seaborn.kdeplot(
-            {'x': np.array(samples_d_true[:, 0]), 'y': np.array(samples_d_true[:, 1])},
-            x='x',
-            y='y',
-            fill=True,
-            alpha=0.5,
-            ax=axes[1, 0],
-        )
+        plot_model_density(model, z_d, axes[1, 0], (-4.5, 4.5), (-4.5, 4.5))
         axes[1, 0].set_title(f'D (actual): {p1_name}↑ {p2_name}↑')
         axes[1, 0].set_xlim(-4.5, 4.5)
         axes[1, 0].set_ylim(-4.5, 4.5)
         axes[1, 0].set_aspect('equal')
         axes[1, 0].grid(True)
 
-        seaborn.kdeplot(
-            {'x': np.array(samples_d_pred[:, 0]), 'y': np.array(samples_d_pred[:, 1])},
-            x='x',
-            y='y',
-            fill=True,
-            alpha=0.5,
-            ax=axes[1, 1],
-        )
+        plot_model_density(model, z_d_hat, axes[1, 1], (-4.5, 4.5), (-4.5, 4.5), cmap='Reds')
         axes[1, 1].set_title('D̂ = B + C − A (predicted)')
         axes[1, 1].set_xlim(-4.5, 4.5)
         axes[1, 1].set_ylim(-4.5, 4.5)
         axes[1, 1].set_aspect('equal')
         axes[1, 1].grid(True)
 
-        seaborn.kdeplot(
-            {'x': np.array(samples_d_true[:, 0]), 'y': np.array(samples_d_true[:, 1])},
-            x='x',
-            y='y',
-            fill=False,
-            alpha=0.7,
-            ax=axes[1, 2],
-            color='blue',
+        plot_model_density(
+            model, z_d, axes[1, 2], (-4.5, 4.5), (-4.5, 4.5), fill=False, cmap='Blues'
         )
-        seaborn.kdeplot(
-            {'x': np.array(samples_d_pred[:, 0]), 'y': np.array(samples_d_pred[:, 1])},
-            x='x',
-            y='y',
-            fill=False,
-            alpha=0.7,
-            ax=axes[1, 2],
-            color='red',
+        plot_model_density(
+            model, z_d_hat, axes[1, 2], (-4.5, 4.5), (-4.5, 4.5), fill=False, cmap='Reds'
         )
         axes[1, 2].set_title(f'Overlay (L2={l2_error:.3f}, cos={cos_sim:.3f})')
         axes[1, 2].set_xlim(-4.5, 4.5)
@@ -168,8 +124,6 @@ def run_compositional(
         )
 
         fig.suptitle(f'Parallelogram Test: {p1_name} × {p2_name}', fontsize=14)
-        fig.tight_layout()
 
         slug = f'{p1_name}_{p2_name}'.replace(' ', '_').lower()
         save_figure(fig, os.path.join(save_path, f'compositional_{slug}.pdf'))
-        plt.close(fig)
