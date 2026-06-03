@@ -24,8 +24,11 @@ training:
 
 distribution:
   num_spins: 12
+  num_states: 2
   coupling_scale: 1.0
   bias_scale: 0.5
+  graph_type: random_edge_fixed_prob
+  edge_prob: 0.5
 
 evaluation:
   num_distributions: 256

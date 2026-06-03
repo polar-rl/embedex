@@ -23,17 +23,11 @@ class EvaluationMetrics(NamedTuple):
     std_jsd: jax.Array
 
 
-def empirical_pmf(samples: jax.Array, num_spins: int) -> jax.Array:
-    """Empirical PMF over all 2**N states from generated binary samples.
-
-    Used for quick visualization labels; the headline metric scores the model's
-    log_prob directly (see `model_log_pmf`) to avoid finite-sample noise.
-    """
-
-    powers = 2 ** jnp.arange(num_spins)
-    bits = jnp.clip(jnp.round(samples), 0, 1).astype(jnp.int32)
-    indices = bits @ powers
-    counts = jnp.zeros(2**num_spins).at[indices].add(1.0)
+def empirical_pmf(samples: jax.Array, num_spins: int, num_states: int) -> jax.Array:
+    powers = num_states ** jnp.arange(num_spins)
+    cats = jnp.clip(jnp.round(samples), 0, num_states - 1).astype(jnp.int32)
+    indices = cats @ powers
+    counts = jnp.zeros(num_states**num_spins).at[indices].add(1.0)
     total = counts.sum()
     return jnp.where(total > 0, counts / total, jnp.ones_like(counts) / counts.shape[0])
 
@@ -45,14 +39,6 @@ def model_log_pmf(
     num_evals: int,
     key: jax.Array,
 ) -> jax.Array:
-    """Normalized model log-PMF over all enumerated states.
-
-    `FlowEmbedding.log_prob` handles the variance reduction: with `reps > 1` it
-    averages that many stochastic passes in probability space. Here we just
-    renormalize the result across the enumerated support so it's a proper PMF,
-    with no dependence on generated-sample count.
-    """
-
     log_probs, _, _ = model.log_prob(states, embedding, key, reps=num_evals)
     return log_probs - jax.nn.logsumexp(log_probs)
 
@@ -92,12 +78,17 @@ def evaluate(
     mrfs = random_mrfs(
         config.num_distributions,
         distribution.num_spins,
+        distribution.num_states,
         distribution.coupling_scale,
         distribution.bias_scale,
+        distribution.edge_prob,
         mrf_key,
+        graph_type=distribution.graph_type,
+        edge_prob_min=distribution.edge_prob_min,
+        edge_prob_max=distribution.edge_prob_max,
     )
     data = sample_batch(mrfs, config.num_embedding_samples, sample_key)
-    states = all_states(distribution.num_spins)
+    states = all_states(distribution.num_spins, distribution.num_states)
 
     metrics = compute_metrics(
         model,

@@ -8,8 +8,14 @@ from embedex.distributions.config import ModelConfig, TrainingConfig
 @dataclass
 class MRFDistributionConfig:
     num_spins: int = 12
+    num_states: int = 2
     coupling_scale: float = 1.0
     bias_scale: float = 0.5
+    # Graph topology: 'full' | 'random_edge_fixed_prob' | 'random_edge_random_prob'
+    graph_type: str = 'random_edge_fixed_prob'
+    edge_prob: float = 0.5
+    edge_prob_min: float = 0.1
+    edge_prob_max: float = 0.9
 
 
 @dataclass

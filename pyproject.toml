@@ -36,6 +36,12 @@ build-backend = 'setuptools.build_meta'
 [tool.setuptools.packages.find]
 include = ['embedex*']
 
+[tool.pytest.ini_options]
+filterwarnings = [
+    # tensorflow_probability (pulled in by distrax) still touches deprecated jax internals.
+    'ignore:jax.core.pytype_aval_mappings is deprecated:DeprecationWarning',
+]
+
 [tool.ruff]
 indent-width = 4
 line-length = 100

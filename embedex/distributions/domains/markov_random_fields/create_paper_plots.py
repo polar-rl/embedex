@@ -18,6 +18,20 @@ from embedex.distributions.metrics import js_divergence
 from embedex.distributions.utils import save_figure
 
 
+def _random_mrf(distribution: MRFDistributionConfig, key: jax.Array) -> MRF:
+    return MRF.random(
+        num_spins=distribution.num_spins,
+        num_states=distribution.num_states,
+        coupling_scale=distribution.coupling_scale,
+        bias_scale=distribution.bias_scale,
+        edge_prob=distribution.edge_prob,
+        edge_prob_min=distribution.edge_prob_min,
+        edge_prob_max=distribution.edge_prob_max,
+        graph_type=distribution.graph_type,
+        key=key,
+    )
+
+
 def reconstruct(
     model: FlowEmbedding,
     mrf: MRF,
@@ -25,45 +39,49 @@ def reconstruct(
     num_generated_samples: int,
     key: jax.Array,
 ) -> np.ndarray:
-    """Embed samples from `mrf` and generate binary samples from the model."""
-
     sample_key, gen_key = jax.random.split(key, 2)
 
     samples = mrf.sample(num_embedding_samples, sample_key)
     embedding, _ = model.embed(samples, jnp.ones(samples.shape[0]))
     generated = model.generate(embedding, num_generated_samples, key=gen_key)
 
-    return np.clip(np.round(np.array(generated)), 0, 1)
+    return np.clip(np.round(np.array(generated)), 0, mrf.num_states - 1).astype(int)
+
+
+def _agreement(samples: np.ndarray) -> np.ndarray:
+    return (samples[:, :, None] == samples[:, None, :]).mean(axis=0)
+
+
+def _edge_descriptors(coupling: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    q = coupling.shape[-1]
+    strength = np.linalg.norm(coupling, axis=(2, 3))
+    diag = np.einsum('ijaa->ij', coupling)
+    off = coupling.sum(axis=(2, 3)) - diag
+    signed = diag / q - off / max(q * (q - 1), 1)
+    return strength, signed
 
 
 def draw_coupling_graph(ax: plt.Axes, coupling: np.ndarray) -> None:
-    """Draw the field as a node-link graph.
-
-    Nodes sit on a circle; each edge is colored and weighted by its coupling
-    J_ij (red positive, blue negative, width by magnitude). Zero couplings are
-    omitted, so this reads off the graph topology directly once it varies
-    across the family.
-    """
-
     n = coupling.shape[0]
     angles = 2.0 * np.pi * np.arange(n) / n
     xs, ys = np.cos(angles), np.sin(angles)
 
-    jmax = max(float(np.abs(coupling).max()), 1e-8)
-    threshold = 1e-3 * jmax
-    cmap = plt.cm.RdBu_r
-    norm = mpl.colors.Normalize(vmin=-jmax, vmax=jmax)
+    strength, signed = _edge_descriptors(coupling)
+    smax = max(float(strength.max()), 1e-8)
+    cmax = max(float(np.abs(signed).max()), 1e-8)
+    threshold = 1e-3 * smax
+    cmap = plt.cm.RdBu  # blue = favours matching, red = favours mismatching
+    norm = mpl.colors.Normalize(vmin=-cmax, vmax=cmax)
 
     for i in range(n):
         for j in range(i + 1, n):
-            w = float(coupling[i, j])
-            if abs(w) <= threshold:
+            if strength[i, j] <= threshold:
                 continue
             ax.plot(
                 [xs[i], xs[j]],
                 [ys[i], ys[j]],
-                color=cmap(norm(w)),
-                linewidth=0.5 + 4.0 * abs(w) / jmax,
+                color=cmap(norm(signed[i, j])),
+                linewidth=0.5 + 4.0 * strength[i, j] / smax,
                 alpha=0.8,
                 zorder=1,
             )
@@ -83,66 +101,102 @@ def draw_coupling_graph(ax: plt.Axes, coupling: np.ndarray) -> None:
     plt.colorbar(sm, ax=ax, shrink=0.8)
 
 
-def create_reconstruction_plot(
-    model: FlowEmbedding,
-    mrf: MRF,
-    config: VisualizationConfig,
-    key: jax.Array,
+def _agreement_norm(num_states: int) -> mpl.colors.Normalize:
+    return mpl.colors.TwoSlopeNorm(vmin=0.0, vcenter=1.0 / num_states, vmax=1.0)
+
+
+def _triptych(
+    true_mat: np.ndarray,
+    recon_mat: np.ndarray,
+    *,
+    title: str,
+    xlabel: str | None = None,
+    ylabel: str | None = None,
+    yticks: range | None = None,
+    aspect: str | None = None,
+    cmap: str = 'Blues',
+    norm: mpl.colors.Normalize | None = None,
 ) -> Figure:
-    """The Ising-style belief-reconstruction panel for a single field.
+    fig, axes = plt.subplots(1, 3, figsize=(14, 4.5))
+    kw = {} if aspect is None else {'aspect': aspect}
+    scale_kw = {'norm': norm} if norm is not None else {'vmin': 0, 'vmax': 1}
 
-    True vs reconstructed pairwise marginals and their difference, the single-
-    node marginals, the coupling matrix J (the field's graph), and a strip of
-    generated samples.
-    """
+    im0 = axes[0].imshow(true_mat, cmap=cmap, **scale_kw, **kw)
+    axes[0].set_title('True')
+    plt.colorbar(im0, ax=axes[0], shrink=0.8)
 
-    n = mrf.num_spins
-    true_pair = np.array(mrf.pairwise_marginals())
-    true_single = np.array(mrf.single_marginals())
-    coupling = np.array(mrf.J)
+    im1 = axes[1].imshow(recon_mat, cmap=cmap, **scale_kw, **kw)
+    axes[1].set_title('Reconstructed')
+    plt.colorbar(im1, ax=axes[1], shrink=0.8)
 
-    gen = reconstruct(
-        model, mrf, config.num_embedding_samples, config.num_generated_samples, key
-    )
-    recon_pair = (gen.T @ gen) / len(gen)
-    recon_single = gen.mean(axis=0)
-
-    fig, axes = plt.subplots(2, 3, figsize=(14, 9))
-
-    vmax = max(true_pair.max(), recon_pair.max(), 0.01)
-    im0 = axes[0, 0].imshow(true_pair, cmap='Blues', vmin=0, vmax=vmax)
-    axes[0, 0].set_title('True P(xi=1, xj=1)')
-    plt.colorbar(im0, ax=axes[0, 0], shrink=0.8)
-
-    im1 = axes[0, 1].imshow(recon_pair, cmap='Blues', vmin=0, vmax=vmax)
-    axes[0, 1].set_title('Reconstructed')
-    plt.colorbar(im1, ax=axes[0, 1], shrink=0.8)
-
-    diff = true_pair - recon_pair
+    diff = true_mat - recon_mat
     dmax = max(abs(diff.min()), abs(diff.max()), 0.01)
-    im2 = axes[0, 2].imshow(diff, cmap='RdBu', vmin=-dmax, vmax=dmax)
-    axes[0, 2].set_title('Difference')
-    plt.colorbar(im2, ax=axes[0, 2], shrink=0.8)
+    im2 = axes[2].imshow(diff, cmap='RdBu', vmin=-dmax, vmax=dmax, **kw)
+    axes[2].set_title('Difference (true - recon)')
+    plt.colorbar(im2, ax=axes[2], shrink=0.8)
 
-    x = np.arange(n)
-    axes[1, 0].bar(x - 0.15, true_single, width=0.3, label='True', alpha=0.8)
-    axes[1, 0].bar(x + 0.15, recon_single, width=0.3, label='Recon', alpha=0.8)
-    axes[1, 0].set_title('P(xi=1)')
-    axes[1, 0].set_xlabel('Node')
-    axes[1, 0].legend(fontsize=8)
-    axes[1, 0].set_ylim(0, 1)
+    for ax in axes:
+        if xlabel is not None:
+            ax.set_xlabel(xlabel)
+        if ylabel is not None:
+            ax.set_ylabel(ylabel)
+        if yticks is not None:
+            ax.set_yticks(yticks)
 
-    draw_coupling_graph(axes[1, 1], coupling)
-
-    num_show = min(config.sample_strip_num, len(gen))
-    axes[1, 2].imshow(gen[:num_show], cmap='Greys', aspect='auto', interpolation='nearest')
-    axes[1, 2].set_title(f'Generated samples ({num_show})')
-    axes[1, 2].set_xlabel('Node')
-    axes[1, 2].set_ylabel('Sample')
-
-    fig.suptitle(f'MRF Belief Reconstruction (N={n})', fontsize=14)
+    fig.suptitle(title, fontsize=14)
     fig.tight_layout()
+    return fig
 
+
+def create_agreement_figure(
+    true_agree: np.ndarray, recon_agree: np.ndarray, num_spins: int, num_states: int
+) -> Figure:
+    return _triptych(
+        true_agree,
+        recon_agree,
+        title=f'Agreement marginals P(xi = xj)  (N={num_spins}, q={num_states})',
+        xlabel='Node',
+        ylabel='Node',
+        cmap='RdBu',
+        norm=_agreement_norm(num_states),
+    )
+
+
+def create_single_marginals_figure(
+    true_single: np.ndarray, recon_single: np.ndarray, num_spins: int, num_states: int
+) -> Figure:
+    return _triptych(
+        true_single.T,
+        recon_single.T,
+        title=f'Single-node marginals P(xi = c)  (N={num_spins}, q={num_states})',
+        xlabel='Node',
+        ylabel='Class',
+        yticks=range(num_states),
+        aspect='auto',
+    )
+
+
+def create_coupling_graph_figure(coupling: np.ndarray) -> Figure:
+    fig, ax = plt.subplots(figsize=(6, 6))
+    draw_coupling_graph(ax, coupling)
+    fig.tight_layout()
+    return fig
+
+
+def create_samples_figure(gen: np.ndarray, num_states: int, num_show: int) -> Figure:
+    show = gen[:num_show]
+    fig, ax = plt.subplots(figsize=(6, 5))
+    im = ax.imshow(
+        show, cmap=plt.get_cmap('viridis', num_states), aspect='auto',
+        interpolation='nearest', vmin=-0.5, vmax=num_states - 0.5,
+    )
+    ax.set_title(f'Generated samples ({len(show)})')
+    ax.set_xlabel('Node')
+    ax.set_ylabel('Sample')
+    ax.set_yticks([])
+    cbar = plt.colorbar(im, ax=ax, ticks=range(num_states), shrink=0.8)
+    cbar.set_label('Class')
+    fig.tight_layout()
     return fig
 
 
@@ -152,8 +206,6 @@ def create_reconstruction_grid(
     config: VisualizationConfig,
     key: jax.Array,
 ) -> Figure:
-    """Grid of true vs reconstructed pairwise marginals across several fields."""
-
     num_plots = config.grid_num_distributions
     ncols = 4
     nrows = (num_plots + ncols // 2 - 1) // (ncols // 2)
@@ -164,34 +216,31 @@ def create_reconstruction_grid(
 
     for idx in range(num_plots):
         mrf_key, recon_key = jax.random.split(keys[idx], 2)
-        mrf = MRF.random(
-            distribution.num_spins,
-            distribution.coupling_scale,
-            distribution.bias_scale,
-            mrf_key,
-        )
-        true_pair = np.array(mrf.pairwise_marginals())
+        mrf = _random_mrf(distribution, mrf_key)
+        true_agree = np.array(mrf.agreement_marginals())
 
         gen = reconstruct(
             model, mrf, config.num_embedding_samples, config.num_generated_samples, recon_key
         )
-        recon_pair = (gen.T @ gen) / len(gen)
-        jsd = float(js_divergence(mrf.pmf(), empirical_pmf(gen, mrf.num_spins)))
+        recon_agree = _agreement(gen)
+        jsd = float(
+            js_divergence(mrf.pmf(), empirical_pmf(jnp.array(gen), mrf.num_spins, mrf.num_states))
+        )
 
         row = idx // (ncols // 2)
         col_base = (idx % (ncols // 2)) * 2
 
-        vmax = max(true_pair.max(), recon_pair.max(), 0.01)
-        axes[row, col_base].imshow(true_pair, cmap='Blues', vmin=0, vmax=vmax)
+        agree_norm = _agreement_norm(mrf.num_states)
+        axes[row, col_base].imshow(true_agree, cmap='RdBu', norm=agree_norm)
         axes[row, col_base].set_title('True', fontsize=9)
-        axes[row, col_base + 1].imshow(recon_pair, cmap='Blues', vmin=0, vmax=vmax)
+        axes[row, col_base + 1].imshow(recon_agree, cmap='RdBu', norm=agree_norm)
         axes[row, col_base + 1].set_title(f'Recon (JSD={jsd:.3f})', fontsize=9)
 
         for ax in (axes[row, col_base], axes[row, col_base + 1]):
             ax.set_xticks([])
             ax.set_yticks([])
 
-    fig.suptitle('MRF Pairwise Marginals: True vs Reconstructed', fontsize=14)
+    fig.suptitle('MRF Agreement Structure: True vs Reconstructed', fontsize=14)
     fig.tight_layout()
 
     return fig
@@ -206,17 +255,34 @@ def generate_paper_plots(
 ) -> None:
     single_key, grid_key = jax.random.split(key, 2)
 
-    print('Generating belief reconstruction plot...')
+    print('Generating belief reconstruction figures...')
     mrf_key, recon_key = jax.random.split(single_key, 2)
-    mrf = MRF.random(
-        distribution.num_spins,
-        distribution.coupling_scale,
-        distribution.bias_scale,
-        mrf_key,
+    mrf = _random_mrf(distribution, mrf_key)
+    q = mrf.num_states
+
+    gen = reconstruct(
+        model, mrf, config.num_embedding_samples, config.num_generated_samples, recon_key
     )
-    fig = create_reconstruction_plot(model, mrf, config, recon_key)
-    save_figure(fig, os.path.join(save_path, 'mrf_reconstruction.pdf'))
-    plt.close(fig)
+
+    true_agree = np.array(mrf.agreement_marginals())
+    recon_agree = _agreement(gen)
+    true_single = np.array(mrf.single_marginals())
+    recon_single = np.stack([(gen == c).mean(axis=0) for c in range(q)], axis=1)
+    coupling = np.array(mrf.J)
+
+    figures = {
+        'mrf_pairwise_marginals.pdf': create_agreement_figure(
+            true_agree, recon_agree, mrf.num_spins, q
+        ),
+        'mrf_class_marginals.pdf': create_single_marginals_figure(
+            true_single, recon_single, mrf.num_spins, q
+        ),
+        'mrf_coupling_graph.pdf': create_coupling_graph_figure(coupling),
+        'mrf_samples.pdf': create_samples_figure(gen, q, config.sample_strip_num),
+    }
+    for name, fig in figures.items():
+        save_figure(fig, os.path.join(save_path, name))
+        plt.close(fig)
 
     print('Generating reconstruction grid...')
     fig = create_reconstruction_grid(model, distribution, config, grid_key)

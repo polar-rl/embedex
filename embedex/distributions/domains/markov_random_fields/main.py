@@ -20,14 +20,11 @@ def main() -> None:
 
     figure_save_dir = os.path.join(cfg.figure_dir, cfg.run_name)
 
-    # One model variable per node of the field. Binary state for now (q = 2);
-    # this becomes the Potts cardinality once categorical fields land.
     cfg.model.input_dim = cfg.distribution.num_spins
     cfg.model.output_dim = cfg.distribution.num_spins
     if cfg.model.generator.flow_type == 'dfm':
-        cfg.model.generator.dfm_num_classes = 2
+        cfg.model.generator.dfm_num_classes = cfg.distribution.num_states
 
-    # Discrete data: normalizing flows need dequantization to model it.
     dequantize = cfg.model.generator.flow_type == 'nf'
 
     if cfg.model_ckpt is None:
@@ -40,9 +37,14 @@ def main() -> None:
             mrfs = random_mrfs(
                 batch_size,
                 cfg.distribution.num_spins,
+                cfg.distribution.num_states,
                 cfg.distribution.coupling_scale,
                 cfg.distribution.bias_scale,
+                cfg.distribution.edge_prob,
                 mrf_key,
+                graph_type=cfg.distribution.graph_type,
+                edge_prob_min=cfg.distribution.edge_prob_min,
+                edge_prob_max=cfg.distribution.edge_prob_max,
             )
             return sample_batch(mrfs, num_samples, sample_key)
 
