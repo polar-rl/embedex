@@ -14,7 +14,6 @@ CELLS = [
 ]
 
 DOMAIN_DIR = Path(__file__).resolve().parent
-REPO_ROOT = DOMAIN_DIR.parents[3]
 DEFAULT_MODEL_DIR = 'models/distributions/donuts'
 
 
@@ -48,7 +47,7 @@ def final_ckpt_path(cell: str, run_name: str, overrides: list[str]) -> Path:
             model_dir = value
 
     filename = f'{num_iterations:0{len(str(num_iterations))}}.eqx'
-    return REPO_ROOT / model_dir / run_name / filename
+    return Path(model_dir) / run_name / filename
 
 
 def main() -> None:
@@ -83,7 +82,7 @@ def main() -> None:
             continue
 
         start = time.monotonic()
-        result = subprocess.run(command, cwd=REPO_ROOT)
+        result = subprocess.run(command)
         elapsed = time.monotonic() - start
 
         if result.returncode == 0:
