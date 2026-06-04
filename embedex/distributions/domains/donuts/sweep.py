@@ -23,6 +23,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--num-seeds', type=int, default=5)
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument(
+        '--suffix',
+        type=str,
+        default=None,
+        help='Run-name suffix for variants, e.g. --suffix r1 names runs <cell>_r1_s<seed>. '
+        'Use alongside --set so variant checkpoints do not collide with the base grid.',
+    )
+    parser.add_argument(
         '--set',
         dest='overrides',
         nargs='*',
@@ -57,7 +64,8 @@ def main() -> None:
     completed, skipped, failed = [], [], []
 
     for i, (cell, seed) in enumerate(runs, 1):
-        run_name = f'{cell}_s{seed}'
+        variant = f'{cell}_{args.suffix}' if args.suffix else cell
+        run_name = f'{variant}_s{seed}'
         ckpt = final_ckpt_path(cell, run_name, args.overrides)
 
         if ckpt.exists():

@@ -30,19 +30,24 @@ def compute_nll(
     data: jax.Array,
     num_embedding_samples: int,
     num_logprob_samples: int,
-    reps: int,
-    key: jax.Array,
 ) -> jax.Array:
-    keys = jax.random.split(key, data.shape[0])
+    """Mean held-out NLL via the exact log-density path (`key=None`).
 
-    def per_dist(samples: jax.Array, dist_key: jax.Array) -> jax.Array:
+    Exact for both generators in 2D: closed-form change of variables for the
+    NF, integrated exact Jacobian trace for FM. The stochastic (Hutchinson)
+    path must not be used here: its noise enters the density through an
+    exponent, so E[e^X] > e^(E[X]) inflates densities and reports NLL below
+    the entropy floor of the family.
+    """
+
+    def per_dist(samples: jax.Array) -> jax.Array:
         embed_samples = samples[:num_embedding_samples]
         holdout = samples[-num_logprob_samples:]
         z, _ = model.embed(embed_samples, jnp.ones(embed_samples.shape[0]))
-        log_probs, _, _ = model.log_prob(holdout, z, key=dist_key, reps=reps)
+        log_probs, _, _ = model.log_prob(holdout, z, key=None)
         return -jnp.mean(log_probs)
 
-    return jnp.mean(jax.vmap(per_dist)(data, keys))
+    return jnp.mean(jax.vmap(per_dist)(data))
 
 
 @eqx.filter_jit
@@ -138,16 +143,9 @@ def evaluate(
         gen_key,
     )
 
-    key, swd_key, nll_key = jax.random.split(key, 3)
+    key, swd_key = jax.random.split(key, 2)
     metrics = compute_metrics(data, samples, swd_key)
-    nll = compute_nll(
-        model,
-        data,
-        config.num_embedding_samples,
-        config.num_logprob_samples,
-        config.num_logprob_reps,
-        nll_key,
-    )
+    nll = compute_nll(model, data, config.num_embedding_samples, config.num_logprob_samples)
     metrics = metrics._replace(nll=nll)
 
     print(f'Mean Error: {metrics.mean_error:.5f}')
@@ -193,11 +191,9 @@ def evaluate_sample_efficiency(
             gen_key,
         )
 
-        key, swd_key, nll_key = jax.random.split(key, 3)
+        key, swd_key = jax.random.split(key, 2)
         metrics = compute_metrics(data, samples, swd_key)
-        nll = compute_nll(
-            model, data, n, config.num_logprob_samples, config.num_logprob_reps, nll_key
-        )
+        nll = compute_nll(model, data, n, config.num_logprob_samples)
         metrics = metrics._replace(nll=nll)
 
         results[n] = metrics

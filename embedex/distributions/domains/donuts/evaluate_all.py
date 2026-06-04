@@ -28,7 +28,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--n-eval', type=int, nargs='*', default=N_EVAL_GRID)
     parser.add_argument('--num-logprob-samples', type=int, default=512)
     parser.add_argument('--num-generated-samples', type=int, default=1024)
-    parser.add_argument('--logprob-reps', type=int, default=8)
     parser.add_argument('--dist-batch-size', type=int, default=64)
     parser.add_argument('--runs', nargs='*', default=None, help='Only evaluate these run names')
     parser.add_argument('--skip-baselines', action='store_true')
@@ -87,16 +86,17 @@ def eval_model_chunk(
     true_radii: jax.Array,
     true_widths: jax.Array,
     num_generated: int,
-    reps: int,
     key: jax.Array,
 ):
     keys = jax.random.split(key, embed_data.shape[0])
 
     def per_dist(emb, hold, ref, t_mean, t_radius, t_width, k):
-        gen_key, logprob_key, swd_key = jax.random.split(k, 3)
+        gen_key, swd_key = jax.random.split(k, 2)
         z, _ = model.embed(emb, jnp.ones(emb.shape[0]))
         generated = model.generate(z, num_generated, key=gen_key)
-        log_probs, _, _ = model.log_prob(hold, z, key=logprob_key, reps=reps)
+        # Exact log-density path; the stochastic trace estimator is biased in
+        # probability space and inflates FM densities (see donuts/evaluate.py).
+        log_probs, _, _ = model.log_prob(hold, z, key=None)
         nll = -jnp.mean(log_probs)
         swd = sliced_wasserstein_distance(ref, generated, NUM_SWD_PROJECTIONS, swd_key)
         center_error, radius_error, width_error = param_errors(generated, t_mean, t_radius, t_width)
@@ -242,7 +242,6 @@ def main() -> None:
                 radii,
                 widths,
                 args.num_generated_samples,
-                args.logprob_reps,
                 key,
             )
 

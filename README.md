@@ -88,7 +88,7 @@ python3 embedex/distributions/domains/donuts/plots.py
 
 `sweep.py` shells out to `main.py` once per (cell, seed) with `run_name=<cell>_s<seed>`; `--dry-run` prints the commands and `--set` forwards overrides to every run.
 
-`evaluate_all.py` builds its eval set from `--eval-seed`, independent of all training seeds and identical for every run, so comparisons are paired per eval distribution. For each run and each embedding-set size in `--n-eval` it records held-out NLL (averaged over `--logprob-reps` stochastic passes), sliced Wasserstein-2 against a disjoint reference set, and method-of-moments parameter-recovery errors, writing per-distribution values to JSONL. It is resumable: existing (run, n_eval) rows are skipped.
+`evaluate_all.py` builds its eval set from `--eval-seed`, independent of all training seeds and identical for every run, so comparisons are paired per eval distribution. For each run and each embedding-set size in `--n-eval` it records held-out NLL (exact log-density path for both NF and FM), sliced Wasserstein-2 against a disjoint reference set, and method-of-moments parameter-recovery errors, writing per-distribution values to JSONL. It is resumable: existing (run, n_eval) rows are skipped.
 
 Two training-free baselines from `baselines.py` are scored the same way on the same samples: a Gaussian KDE (Scott bandwidth; no family knowledge) and an oracle method-of-moments donut fit (the true family hard-coded; its log-density smooths the annulus edge since the raw fit's hard support makes NLL degenerate).
 
