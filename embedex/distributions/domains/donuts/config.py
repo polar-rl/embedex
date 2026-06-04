@@ -17,6 +17,8 @@ class EvaluationConfig:
     num_distributions: int = 128
     num_embedding_samples: int = 128
     num_generated_samples: int = 1024
+    num_logprob_samples: int = 512
+    num_logprob_reps: int = 8
     sample_efficiency_counts: list[int] = field(default_factory=lambda: [4, 8, 16, 32, 64, 128])
 
 

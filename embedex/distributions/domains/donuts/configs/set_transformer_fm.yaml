@@ -23,13 +23,13 @@ training:
   seed: 0
 
 experiments:
-  width_analysis: true
-  interpolation: true
-  linear_functionals: true
-  gaussian_ood: true
-  property_directions: true
-  embedding_visualization: true
-  compositional: true
+  width_analysis: false
+  interpolation: false
+  linear_functionals: false
+  gaussian_ood: false
+  property_directions: false
+  embedding_visualization: false
+  compositional: false
 
-run_name: flow_matching
+run_name: set_transformer_fm
 seed: 0

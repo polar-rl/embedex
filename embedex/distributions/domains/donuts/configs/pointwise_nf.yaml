@@ -1,10 +1,13 @@
 model:
   embedding:
+    block_type: pointwise
     embedding_dim: 16
     hidden_size: 64
     num_layers: 3
     num_rounds: 3
   generator:
+    flow_type: nf
+    conditioning: concat
     nf_hidden_size: 32
     nf_num_layers: 3
     nf_num_coupling_layers: 8
@@ -17,13 +20,13 @@ training:
   seed: 0
 
 experiments:
-  width_analysis: true
-  interpolation: true
-  linear_functionals: true
-  gaussian_ood: true
-  property_directions: true
-  embedding_visualization: true
-  compositional: true
+  width_analysis: false
+  interpolation: false
+  linear_functionals: false
+  gaussian_ood: false
+  property_directions: false
+  embedding_visualization: false
+  compositional: false
 
-run_name: multi_round
+run_name: pointwise_nf
 seed: 0

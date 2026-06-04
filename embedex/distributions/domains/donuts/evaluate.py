@@ -6,7 +6,7 @@ import jax.numpy as jnp
 
 from embedex.distributions.domains.donuts.config import DonutDistributionConfig, EvaluationConfig
 from embedex.distributions.domains.donuts.donut import random_donuts, sample_batch
-from embedex.distributions.embedding import DistributionEmbedding
+from embedex.distributions.embedding import DistributionEmbedding, FlowEmbedding
 from embedex.distributions.metrics import sliced_wasserstein_distance
 
 
@@ -16,11 +16,33 @@ class EvaluationMetrics(NamedTuple):
     width_error: jax.Array
     width_radius_ratio_error: jax.Array
     swd: jax.Array
+    nll: jax.Array = jnp.array(jnp.nan)
 
 
 @eqx.filter_jit
 def rmse(x: jax.Array, y: jax.Array, axis: int = -1) -> jax.Array:
     return jnp.mean(jnp.sqrt(jnp.sum((x - y) ** 2, axis=axis)))
+
+
+@eqx.filter_jit
+def compute_nll(
+    model: FlowEmbedding,
+    data: jax.Array,
+    num_embedding_samples: int,
+    num_logprob_samples: int,
+    reps: int,
+    key: jax.Array,
+) -> jax.Array:
+    keys = jax.random.split(key, data.shape[0])
+
+    def per_dist(samples: jax.Array, dist_key: jax.Array) -> jax.Array:
+        embed_samples = samples[:num_embedding_samples]
+        holdout = samples[-num_logprob_samples:]
+        z, _ = model.embed(embed_samples, jnp.ones(embed_samples.shape[0]))
+        log_probs, _, _ = model.log_prob(holdout, z, key=dist_key, reps=reps)
+        return -jnp.mean(log_probs)
+
+    return jnp.mean(jax.vmap(per_dist)(data, keys))
 
 
 @eqx.filter_jit
@@ -93,7 +115,9 @@ def evaluate(
     distribution: DonutDistributionConfig,
     key: jax.Array,
 ) -> EvaluationMetrics:
-    total_samples = config.num_embedding_samples + config.num_generated_samples
+    total_samples = (
+        config.num_embedding_samples + config.num_generated_samples + config.num_logprob_samples
+    )
 
     key, donut_key, sample_key = jax.random.split(key, 3)
     donuts = random_donuts(
@@ -114,14 +138,24 @@ def evaluate(
         gen_key,
     )
 
-    key, swd_key = jax.random.split(key, 2)
+    key, swd_key, nll_key = jax.random.split(key, 3)
     metrics = compute_metrics(data, samples, swd_key)
+    nll = compute_nll(
+        model,
+        data,
+        config.num_embedding_samples,
+        config.num_logprob_samples,
+        config.num_logprob_reps,
+        nll_key,
+    )
+    metrics = metrics._replace(nll=nll)
 
     print(f'Mean Error: {metrics.mean_error:.5f}')
     print(f'Radius Error: {metrics.radius_error:.5f}')
     print(f'Width Error: {metrics.width_error:.5f}')
     print(f'Width / Radius Error: {metrics.width_radius_ratio_error:.5f}')
     print(f'SWD: {metrics.swd:.5f}')
+    print(f'NLL: {metrics.nll:.5f}')
 
     return metrics
 
@@ -133,7 +167,7 @@ def evaluate_sample_efficiency(
     key: jax.Array,
 ) -> dict[int, EvaluationMetrics]:
     sample_counts = config.sample_efficiency_counts
-    total_samples = max(sample_counts) + config.num_generated_samples
+    total_samples = max(sample_counts) + config.num_generated_samples + config.num_logprob_samples
 
     key, donut_key, sample_key = jax.random.split(key, 3)
     donuts = random_donuts(
@@ -145,8 +179,8 @@ def evaluate_sample_efficiency(
     )
     data = sample_batch(donuts, total_samples, sample_key)
 
-    print(f'{"n":>6}  {"Mean":>8}  {"Radius":>8}  {"Width":>8}  {"W/R":>8}  {"SWD":>8}')
-    print(f'{"-" * 6}  {"-" * 8}  {"-" * 8}  {"-" * 8}  {"-" * 8}  {"-" * 8}')
+    print(f'{"n":>6}  {"Mean":>8}  {"Radius":>8}  {"Width":>8}  {"W/R":>8}  {"SWD":>8}  {"NLL":>8}')
+    print(f'{"-" * 6}  {"-" * 8}  {"-" * 8}  {"-" * 8}  {"-" * 8}  {"-" * 8}  {"-" * 8}')
 
     results = {}
     for n in sample_counts:
@@ -159,14 +193,18 @@ def evaluate_sample_efficiency(
             gen_key,
         )
 
-        key, swd_key = jax.random.split(key, 2)
+        key, swd_key, nll_key = jax.random.split(key, 3)
         metrics = compute_metrics(data, samples, swd_key)
+        nll = compute_nll(
+            model, data, n, config.num_logprob_samples, config.num_logprob_reps, nll_key
+        )
+        metrics = metrics._replace(nll=nll)
 
         results[n] = metrics
         print(
             f'{n:>6d}  {metrics.mean_error:>8.4f}  {metrics.radius_error:>8.4f}  '
             f'{metrics.width_error:>8.4f}  {metrics.width_radius_ratio_error:>8.4f}  '
-            f'{metrics.swd:>8.4f}'
+            f'{metrics.swd:>8.4f}  {metrics.nll:>8.4f}'
         )
 
     return results
