@@ -4,9 +4,7 @@ import jax
 
 from embedex.distributions.builder import count_parameters, create_model, load_ckpt, save_ckpt
 from embedex.distributions.domains.donuts.config import parse_args
-from embedex.distributions.domains.donuts.create_paper_plots import generate_paper_plots
 from embedex.distributions.domains.donuts.donut import random_donuts, sample_batch
-from embedex.distributions.domains.donuts.evaluate import evaluate, evaluate_sample_efficiency
 from embedex.distributions.domains.donuts.experiments import (
     run_compositional,
     run_embedding_visualization,
@@ -16,6 +14,7 @@ from embedex.distributions.domains.donuts.experiments import (
     run_property_directions,
     run_width_analysis,
 )
+from embedex.distributions.domains.donuts.plots import generate_paper_plots
 from embedex.distributions.training import train
 from embedex.distributions.utils import plot_loss_curve, plot_norm_curve
 
@@ -56,16 +55,15 @@ def main() -> None:
         key, model_key = jax.random.split(key, 2)
         model = load_ckpt(cfg.model_ckpt, dequantize=False, key=model_key)
 
+    # Per-model figures and the qualitative experiments are inspection artifacts
+    # (A5). They run only in single-model mode; metrics for the grid come from
+    # the batch pipeline (evaluate_all.py -> aggregate.py -> plots.py), so a
+    # training sweep run just trains and checkpoints.
+    if cfg.model_ckpt is None:
+        return
+
     key, plots_key = jax.random.split(key, 2)
     generate_paper_plots(model, figure_save_dir, cfg.visualization, plots_key)
-
-    print('Running model evaluation...')
-    key, eval_key = jax.random.split(key, 2)
-    evaluate(model, cfg.evaluation, cfg.distribution, eval_key)
-
-    print('\nRunning sample efficiency sweep...')
-    key, sweep_key = jax.random.split(key, 2)
-    evaluate_sample_efficiency(model, cfg.evaluation, cfg.distribution, sweep_key)
 
     if cfg.experiments.width_analysis:
         print('\nRunning width analysis experiment...')

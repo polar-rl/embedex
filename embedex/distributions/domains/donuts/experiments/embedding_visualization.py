@@ -78,7 +78,7 @@ def run_embedding_visualization(
         axes[i].grid(True, alpha=0.3)
         plt.colorbar(sc, ax=axes[i], fraction=0.046, pad=0.04)
 
-    fig.suptitle('t-SNE of Donut Embeddings', fontsize=14)
+    fig.suptitle('t-SNE of Donut Embeddings', fontsize=21)
     save_figure(fig, os.path.join(save_path, 'embedding_tsne.pdf'))
 
     print('  Computing PCA...')
@@ -103,7 +103,7 @@ def run_embedding_visualization(
         axes[i].set_ylabel(f'PC2 ({var_explained[1]:.1%})')
         plt.colorbar(sc, ax=axes[i], fraction=0.046, pad=0.04)
 
-    fig.suptitle('PCA of Donut Embeddings', fontsize=14)
+    fig.suptitle('PCA of Donut Embeddings', fontsize=21)
     save_figure(fig, os.path.join(save_path, 'embedding_pca.pdf'))
 
     num_components = min(4, embeddings_np.shape[1])
@@ -138,5 +138,5 @@ def run_embedding_visualization(
                 plt.colorbar(sc, ax=axes[pair_idx], fraction=0.046, pad=0.04)
                 pair_idx += 1
 
-        fig.suptitle(f'PCA Pairs — colored by {prop_name}', fontsize=14)
+        fig.suptitle(f'PCA Pairs — colored by {prop_name}', fontsize=21)
         save_figure(fig, os.path.join(save_path, f'embedding_pca_pairs_{slug}.pdf'))

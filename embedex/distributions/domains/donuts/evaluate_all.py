@@ -15,7 +15,7 @@ from embedex.distributions.domains.donuts.config import DonutDistributionConfig
 from embedex.distributions.domains.donuts.donut import random_donuts, sample_batch
 from embedex.distributions.metrics import sliced_wasserstein_distance
 
-N_EVAL_GRID = [4, 8, 16, 32, 64, 128, 256]
+N_EVAL_GRID = [16, 32, 64, 128, 256, 1024]
 NUM_SWD_PROJECTIONS = 1000
 
 
@@ -100,7 +100,10 @@ def eval_model_chunk(
         nll = -jnp.mean(log_probs)
         swd = sliced_wasserstein_distance(ref, generated, NUM_SWD_PROJECTIONS, swd_key)
         center_error, radius_error, width_error = param_errors(generated, t_mean, t_radius, t_width)
-        return nll, swd, center_error, radius_error, width_error
+        # Fraction of non-finite generated samples: the NF inverse-sampling
+        # instability shows up here, and it's the root cause of NaN swd/errors.
+        nan_rate = 1.0 - jnp.mean(jnp.all(jnp.isfinite(generated), axis=-1))
+        return nll, swd, center_error, radius_error, width_error, nan_rate
 
     return jax.vmap(per_dist)(
         embed_data, holdout, reference, true_means, true_radii, true_widths, keys
@@ -128,14 +131,15 @@ def eval_baseline_chunk(
         nll = -jnp.mean(baseline.log_prob(hold))
         swd = sliced_wasserstein_distance(ref, generated, NUM_SWD_PROJECTIONS, swd_key)
         center_error, radius_error, width_error = param_errors(generated, t_mean, t_radius, t_width)
-        return nll, swd, center_error, radius_error, width_error
+        nan_rate = 1.0 - jnp.mean(jnp.all(jnp.isfinite(generated), axis=-1))
+        return nll, swd, center_error, radius_error, width_error, nan_rate
 
     return jax.vmap(per_dist)(
         embed_data, holdout, reference, true_means, true_radii, true_widths, keys
     )
 
 
-METRIC_NAMES = ['nll', 'swd', 'center_error', 'radius_error', 'width_error']
+METRIC_NAMES = ['nll', 'swd', 'center_error', 'radius_error', 'width_error', 'nan_rate']
 
 
 def evaluate_subject(evaluate_chunk, donuts, data, n_eval, args, key) -> dict[str, np.ndarray]:
