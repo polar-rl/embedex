@@ -187,8 +187,12 @@ def create_samples_figure(gen: np.ndarray, num_states: int, num_show: int) -> Fi
     show = gen[:num_show]
     fig, ax = plt.subplots(figsize=(6, 5))
     im = ax.imshow(
-        show, cmap=plt.get_cmap('viridis', num_states), aspect='auto',
-        interpolation='nearest', vmin=-0.5, vmax=num_states - 0.5,
+        show,
+        cmap=plt.get_cmap('viridis', num_states),
+        aspect='auto',
+        interpolation='nearest',
+        vmin=-0.5,
+        vmax=num_states - 0.5,
     )
     ax.set_title(f'Generated samples ({len(show)})')
     ax.set_xlabel('Node')

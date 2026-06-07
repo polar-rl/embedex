@@ -131,9 +131,7 @@ def test_sampling_matches_marginals():
 
 def test_random_mrfs_and_sample_batch_shapes():
     num_distributions, num_spins, num_states, num_samples = 8, 4, 2, 16
-    mrfs = random_mrfs(
-        num_distributions, num_spins, num_states, 1.0, 0.5, 0.5, jax.random.key(0)
-    )
+    mrfs = random_mrfs(num_distributions, num_spins, num_states, 1.0, 0.5, 0.5, jax.random.key(0))
 
     assert mrfs.h.shape == (num_distributions, num_spins, num_states)
     assert mrfs.J.shape == (num_distributions, num_spins, num_spins, num_states, num_states)
