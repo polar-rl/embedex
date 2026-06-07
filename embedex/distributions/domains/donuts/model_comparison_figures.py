@@ -48,8 +48,10 @@ def property_reconstruction_compare(
     n_gen = config.property_reconstruction_num_generated
     sweeps = _sweep(distribution, steps)
 
-    fig = plt.figure(figsize=(2.3 * steps * len(models), 2.3 * len(RECON_PROPS) + 0.9))
-    subfigs = fig.subfigures(1, len(models), wspace=0.04)
+    fig = plt.figure(
+        figsize=(2.6 * steps, 2.6 * len(RECON_PROPS) * len(models) + 0.6), layout='constrained'
+    )
+    subfigs = fig.subfigures(len(models), 1)
     subfigs = [subfigs] if len(models) == 1 else list(subfigs)
 
     for sub, (name, model) in zip(subfigs, models.items(), strict=True):
@@ -64,7 +66,7 @@ def property_reconstruction_compare(
                 if col == 0:
                     ax.set_ylabel(prop)
 
-    save_figure(fig, out_path)
+    save_figure(fig, out_path, tight=False)
     print(f'Saved {out_path}')
 
 
@@ -100,6 +102,7 @@ def interpolation_compare(
     fig, axes = plt.subplots(
         len(rows), total, figsize=(2.3 * total, 2.3 * aspect * len(rows)), squeeze=False
     )
+    ylabel_size = 1.5 * plt.rcParams['axes.labelsize']  # method labels: +50%
     for r, (name, model) in enumerate(rows):
         zs = _interpolation_path(model, start, num_steps)
         for c in range(total):
@@ -113,11 +116,7 @@ def interpolation_compare(
             ax.set_xticks([])
             ax.set_yticks([])
             if c == 0:
-                ax.set_ylabel(name)
-        if r == 0:
-            axes[r][0].set_title('start')
-            axes[r][-1].set_title('end')
-    fig.suptitle('Embedding interpolation between two donuts (same endpoints per row)')
+                ax.set_ylabel(name, fontsize=ylabel_size)
     fig.tight_layout()
     save_figure(fig, out_path)
     print(f'Saved {out_path}')

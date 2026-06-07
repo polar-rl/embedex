@@ -47,12 +47,11 @@ def draw_recon_panel(
     ax.set_aspect('equal')
     ax.set_xticks([])
     ax.set_yticks([])
-    ax.set_title(f'{prop}={value:.2f}\nerr={err:.3f}', fontsize=9)
+    ax.set_title(f'{prop}={value:.2f}\nerr={err:.3f}')
     return err
 
 
 def _sweep(distribution: DonutDistributionConfig, num_steps: int) -> dict:
-    """One sweep per latent property: (values, build_donut, measure_fn, true_fn)."""
     r_lo, r_hi = distribution.radius_range
     w_lo, w_hi = distribution.width_range
     return {
