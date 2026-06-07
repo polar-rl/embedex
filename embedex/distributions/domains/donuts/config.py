@@ -13,20 +13,11 @@ class DonutDistributionConfig:
 
 
 @dataclass
-class EvaluationConfig:
-    num_distributions: int = 128
-    num_embedding_samples: int = 128
-    num_generated_samples: int = 1024
-    sample_efficiency_counts: list[int] = field(default_factory=lambda: [4, 8, 16, 32, 64, 128])
-
-
-@dataclass
 class VisualizationConfig:
     grid_size: int = 512
     density_threshold: float = 0.02
     scatter_size: float = 20.0
     num_contour_levels: int = 10
-    sample_comparison_num_samples: int = 512
 
 
 @dataclass
@@ -53,11 +44,14 @@ class ExperimentConfig:
     embedding_visualization: bool = True
     embedding_visualization_num_distributions: int = 512
     embedding_visualization_num_samples: int = 256
-    embedding_visualization_perplexity: int = 30
-    embedding_visualization_random_state: int = 42
 
     compositional: bool = True
     compositional_num_samples: int = 512
+
+    property_reconstruction: bool = True
+    property_reconstruction_num_samples: int = 128
+    property_reconstruction_num_generated: int = 512
+    property_reconstruction_num_steps: int = 5
 
 
 @dataclass
@@ -65,7 +59,6 @@ class Config:
     model: ModelConfig = field(default_factory=ModelConfig)
     distribution: DonutDistributionConfig = field(default_factory=DonutDistributionConfig)
     training: TrainingConfig = field(default_factory=TrainingConfig)
-    evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
     visualization: VisualizationConfig = field(default_factory=VisualizationConfig)
     experiments: ExperimentConfig = field(default_factory=ExperimentConfig)
 

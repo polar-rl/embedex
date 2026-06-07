@@ -23,9 +23,11 @@ Each domain ships with a set of YAML configs under its `configs/` directory. Dom
 
 ```bash
 python3 embedex/distributions/domains/donuts/main.py \
-    --config embedex/distributions/domains/donuts/configs/baseline.yaml \
+    --config embedex/distributions/domains/donuts/configs/pointwise_nf.yaml \
     --set training.num_iterations=50000 training.learning_rate=5e-4
 ```
+
+Data and output paths (`model_dir`, `figure_dir`, results files) are relative to the working directory, so run commands from the repo root.
 
 ## Checkpointing
 
@@ -35,7 +37,7 @@ To skip retraining and load a previously saved model, point `model_ckpt` at the 
 
 ```bash
 python3 embedex/distributions/domains/donuts/main.py \
-    --set model_ckpt=models/distributions/donuts/baseline/30000.eqx
+    --set model_ckpt=models/distributions/donuts/pointwise_nf/100000.eqx
 ```
 
 The model architecture is reconstructed from the JSON header inside the checkpoint, so no separate config file is required at load time.
@@ -52,14 +54,14 @@ Donuts is a continuous 2D distribution reconstruction benchmark. Each target dis
 
 #### Training Configs
 
-All training configs live in `embedex/distributions/domains/donuts/configs/`:
+The configs in `embedex/distributions/domains/donuts/configs/` form a 2x2 architecture grid (embedding block x conditional generator) at `embedding_dim=16` and 3 rounds. Hidden sizes are chosen so the two embedding blocks have matched parameter budgets (30,704 vs. 30,608, within 0.3%):
 
-| Config                  | Embedding                 | Flow                      | Description               |
-|-------------------------|---------------------------|---------------------------|---------------------------|
-| `baseline.yaml`         | Pointwise MLP (1 round)   | NF (8 coupling layers)    | Single-round baseline     |
-| `multi_round.yaml`      | Pointwise MLP (3 rounds)  | NF (8 coupling layers)    | Multi-round embedding     |
-| `set_transformer.yaml`  | SetTransformer (3 rounds) | NF (8 coupling layers)    | Attention-based embedding |
-| `flow_matching_st.yaml` | SetTransformer (3 rounds) | Flow Matching (100 steps) | FM with SetTransformer    |
+| Config                    | Embedding                   | Flow                      |
+|---------------------------|-----------------------------|---------------------------|
+| `pointwise_nf.yaml`       | Pointwise MLP (hidden 64)   | NF (8 coupling layers)    |
+| `pointwise_fm.yaml`       | Pointwise MLP (hidden 64)   | Flow Matching (100 steps) |
+| `set_transformer_nf.yaml` | SetTransformer (hidden 112) | NF (8 coupling layers)    |
+| `set_transformer_fm.yaml` | SetTransformer (hidden 112) | Flow Matching (100 steps) |
 
 Use any of them by running:
 
@@ -68,9 +70,39 @@ python3 embedex/distributions/domains/donuts/main.py \
     --config embedex/distributions/domains/donuts/configs/<config_file.yaml>
 ```
 
+#### Architecture Sweep and Evaluation
+
+```bash
+# 1. Train every grid cell across seeds (resumable; skips existing checkpoints).
+python3 embedex/distributions/domains/donuts/sweep.py --num-seeds 5
+
+# 2. Score all checkpoints and the training-free baselines on one shared eval set.
+python3 embedex/distributions/domains/donuts/evaluate_all.py
+
+# 3. Summary tables (mean +/- SE over seeds) and paired bootstrap comparisons.
+python3 embedex/distributions/domains/donuts/aggregate.py --compare
+
+# 4. Metric-vs-sample-count figures from results.jsonl.
+python3 embedex/distributions/domains/donuts/plots.py
+```
+
+`sweep.py` shells out to `main.py` once per (cell, seed) with `run_name=<cell>_s<seed>`; `--dry-run` prints the commands and `--set` forwards overrides to every run.
+
+`evaluate_all.py` builds its eval set from `--eval-seed`, independent of all training seeds and identical for every run, so comparisons are paired per eval distribution. For each run and each embedding-set size in `--n-eval` it records held-out NLL (exact log-density path for both NF and FM), sliced Wasserstein-2 against a disjoint reference set, and method-of-moments parameter-recovery errors, writing per-distribution values to JSONL. It is resumable: existing (run, n_eval) rows are skipped.
+
+Two training-free baselines from `baselines.py` are scored the same way on the same samples: a Gaussian KDE (Scott bandwidth; no family knowledge) and an oracle method-of-moments donut fit (the true family hard-coded; its log-density smooths the annulus edge since the raw fit's hard support makes NLL degenerate).
+
+`aggregate.py --compare` reports all-pairs mean differences with bootstrap 95% CIs over the shared eval distributions; a starred row means the CI excludes zero.
+
 #### Experiments
 
-Post-training analysis experiments (visualization, interpolation, linear probes, ...) are toggled via boolean flags in the `experiments` section of the config. The default configs enable every experiment listed in the table below. It is possible to toggle individual experiments via overrides, e.g. `--set experiments.interpolation=false`.
+Post-training analysis experiments (visualization, interpolation, linear probes, ...) are toggled via boolean flags in the `experiments` section of the config.
+
+```bash
+python3 embedex/distributions/domains/donuts/main.py \
+    --set model_ckpt=models/distributions/donuts/pointwise_nf_s0/100000.eqx \
+          experiments.interpolation=true experiments.embedding_visualization=true
+```
 
 | Experiment              | Flag                      | Description                                                                   |
 |-------------------------|---------------------------|-------------------------------------------------------------------------------|

@@ -56,7 +56,7 @@ def create_ood_comparison_plot(
     axes[0, 0].set_ylabel('Input')
     axes[1, 0].set_ylabel('Model Output')
 
-    fig.suptitle(title, fontsize=14)
+    fig.suptitle(title, fontsize=21)
 
     return fig, axes
 

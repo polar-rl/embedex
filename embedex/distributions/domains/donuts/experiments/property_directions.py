@@ -133,5 +133,5 @@ def run_property_directions(
         axes[0, 0].set_ylabel('Samples')
         axes[1, 0].set_ylabel('Density')
 
-        fig.suptitle(f'Property Direction: {dir_name}', fontsize=14)
+        fig.suptitle(f'Property Direction: {dir_name}', fontsize=21)
         save_figure(fig, os.path.join(save_path, f'property_direction_{slug}.pdf'))

@@ -10,6 +10,9 @@ from embedex.distributions.domains.donuts.experiments.linear_functionals import 
 from embedex.distributions.domains.donuts.experiments.property_directions import (
     run_property_directions,
 )
+from embedex.distributions.domains.donuts.experiments.property_reconstruction import (
+    run_property_reconstruction,
+)
 from embedex.distributions.domains.donuts.experiments.width_analysis import run_width_analysis
 
 __all__ = [
@@ -19,5 +22,6 @@ __all__ = [
     'run_interpolation',
     'run_linear_functionals',
     'run_property_directions',
+    'run_property_reconstruction',
     'run_width_analysis',
 ]

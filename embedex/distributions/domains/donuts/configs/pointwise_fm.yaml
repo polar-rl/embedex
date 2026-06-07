@@ -1,11 +1,10 @@
 model:
   embedding:
-    block_type: set_transformer
+    block_type: pointwise
     embedding_dim: 16
     hidden_size: 64
+    num_layers: 3
     num_rounds: 3
-    num_heads: 4
-    num_inducing: 16
   generator:
     flow_type: fm
     conditioning: concat
@@ -23,13 +22,13 @@ training:
   seed: 0
 
 experiments:
-  width_analysis: true
-  interpolation: true
-  linear_functionals: true
-  gaussian_ood: true
-  property_directions: true
-  embedding_visualization: true
-  compositional: true
+  width_analysis: false
+  interpolation: false
+  linear_functionals: false
+  gaussian_ood: false
+  property_directions: false
+  embedding_visualization: false
+  compositional: false
 
-run_name: flow_matching
+run_name: pointwise_fm
 seed: 0

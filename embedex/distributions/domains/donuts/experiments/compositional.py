@@ -123,7 +123,7 @@ def run_compositional(
             ]
         )
 
-        fig.suptitle(f'Parallelogram Test: {p1_name} × {p2_name}', fontsize=14)
+        fig.suptitle(f'Parallelogram Test: {p1_name} × {p2_name}', fontsize=21)
 
         slug = f'{p1_name}_{p2_name}'.replace(' ', '_').lower()
         save_figure(fig, os.path.join(save_path, f'compositional_{slug}.pdf'))
