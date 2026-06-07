@@ -2,7 +2,7 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 
-from embedex.distributions.domains.donuts.donut import Donut
+from embedex.distributions.domains.donuts.donut import Donut, donut_moments
 
 _LOG_FLOOR = 1e-30
 
@@ -59,11 +59,9 @@ class OracleDonutFit(eqx.Module):
     def fit(cls, samples: jax.Array) -> 'OracleDonutFit':
         n = samples.shape[0]
 
-        center = jnp.mean(samples, axis=0)
+        center, radius, width = donut_moments(samples)
         dists = jnp.linalg.norm(samples - center, axis=-1)
-        radius = jnp.mean(dists)
         dists_std = jnp.std(dists)
-        width = jnp.sqrt(12.0) * dists_std / (radius + 1e-8)
 
         iqr = jnp.percentile(dists, 75) - jnp.percentile(dists, 25)
         spread = jnp.minimum(dists_std, iqr / 1.34) + 1e-4

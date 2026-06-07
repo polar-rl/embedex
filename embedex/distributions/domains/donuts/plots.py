@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import re
 from collections import defaultdict
 from pathlib import Path
 
@@ -21,6 +22,12 @@ from embedex.distributions.utils import save_figure
 
 METRICS = ['nll', 'swd', 'center_error', 'radius_error', 'width_error']
 BASELINES = ['kde', 'oracle']
+
+
+def is_main_grid_cell(cell: str) -> bool:
+    """Main-grid cell (the intended 4) or a baseline — not an _d/_r/_w ablation variant."""
+    return cell in BASELINES or re.search(r'_(d|r|w)\d+$', cell) is None
+
 
 METRIC_LABELS = {
     'nll': 'Held-out NLL',
@@ -45,6 +52,8 @@ def load_curves(path: Path, metric: str) -> dict[str, dict[int, np.ndarray]]:
     with open(path) as f:
         for line in f:
             row = json.loads(line)
+            if not is_main_grid_cell(row['cell']):
+                continue  # ablation variants belong in the probe figures, not the grid curves
             curves[row['cell']][row['n_eval']].append(row['metrics'][metric]['mean'])
 
     return {
@@ -111,11 +120,6 @@ def plot_metric(curves: dict, metric: str, figure_dir: Path, fmt: str) -> Path:
     fig.savefig(out, dpi=200)
     plt.close(fig)
     return out
-
-
-# --- Per-model paper figures (example donuts + learned density contours) ---
-# Merged from the former create_paper_plots.py; used by main.py for single-model
-# (A5) inspection. The CLI above (metric-vs-n_eval curves) is the grid view.
 
 
 def create_gradient_cmap(color: str | tuple[float, float, float]) -> Colormap:

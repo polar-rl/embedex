@@ -44,11 +44,14 @@ class ExperimentConfig:
     embedding_visualization: bool = True
     embedding_visualization_num_distributions: int = 512
     embedding_visualization_num_samples: int = 256
-    embedding_visualization_perplexity: int = 30
-    embedding_visualization_random_state: int = 42
 
     compositional: bool = True
     compositional_num_samples: int = 512
+
+    property_reconstruction: bool = True
+    property_reconstruction_num_samples: int = 128
+    property_reconstruction_num_generated: int = 512
+    property_reconstruction_num_steps: int = 5
 
 
 @dataclass

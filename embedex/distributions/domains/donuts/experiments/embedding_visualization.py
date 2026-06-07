@@ -5,7 +5,6 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.decomposition import PCA
-from sklearn.manifold import TSNE
 
 from embedex.distributions.domains.donuts.config import DonutDistributionConfig, ExperimentConfig
 from embedex.distributions.domains.donuts.donut import random_donuts, sample_batch
@@ -54,32 +53,6 @@ def run_embedding_visualization(
         ('radius', 'Radius', radii, 'coolwarm'),
         ('width', 'Width', widths, 'coolwarm'),
     ]
-
-    print('  Computing t-SNE...')
-    tsne = TSNE(
-        n_components=2,
-        perplexity=min(config.embedding_visualization_perplexity, num - 1),
-        random_state=config.embedding_visualization_random_state,
-    )
-    coords_tsne = tsne.fit_transform(embeddings_np)
-
-    fig, axes = plt.subplots(1, 4, figsize=(20, 4.5))
-    for i, (_, name, values, cmap) in enumerate(properties):
-        sc = axes[i].scatter(
-            coords_tsne[:, 0],
-            coords_tsne[:, 1],
-            c=values,
-            cmap=cmap,
-            s=15,
-            alpha=0.7,
-        )
-        axes[i].set_title(name)
-        axes[i].set_aspect('equal')
-        axes[i].grid(True, alpha=0.3)
-        plt.colorbar(sc, ax=axes[i], fraction=0.046, pad=0.04)
-
-    fig.suptitle('t-SNE of Donut Embeddings', fontsize=21)
-    save_figure(fig, os.path.join(save_path, 'embedding_tsne.pdf'))
 
     print('  Computing PCA...')
     pca = PCA(n_components=2)

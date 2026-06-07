@@ -12,7 +12,7 @@ import numpy as np
 from embedex.distributions.builder import count_parameters, load_ckpt
 from embedex.distributions.domains.donuts.baselines import KDEBaseline, OracleDonutFit
 from embedex.distributions.domains.donuts.config import DonutDistributionConfig
-from embedex.distributions.domains.donuts.donut import random_donuts, sample_batch
+from embedex.distributions.domains.donuts.donut import donut_moments, random_donuts, sample_batch
 from embedex.distributions.metrics import sliced_wasserstein_distance
 
 N_EVAL_GRID = [16, 32, 64, 128, 256, 1024]
@@ -63,14 +63,9 @@ def param_errors(
     true_radius: jax.Array,
     true_width: jax.Array,
 ) -> tuple[jax.Array, jax.Array, jax.Array]:
-    center = jnp.mean(generated, axis=0)
+    center, radius, width = donut_moments(generated)
     center_error = jnp.linalg.norm(center - true_mean)
-
-    dists = jnp.linalg.norm(generated - center, axis=-1)
-    radius = jnp.mean(dists)
     radius_error = jnp.abs(radius - true_radius)
-
-    width = jnp.sqrt(12.0) * jnp.std(dists) / (radius + 1e-8)
     width_error = jnp.abs(width - true_width)
 
     return center_error, radius_error, width_error
