@@ -20,10 +20,11 @@ RECON_PROPS = ['radius', 'width']
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--pointwise', required=True, help='base pointwise_fm checkpoint (A2)')
     p.add_argument('--set-transformer', required=True, help='base set_transformer_fm ckpt (A2/A4)')
     p.add_argument(
-        '--wide-pointwise', required=True, help='wide single-round pointwise ckpt (A4 failure row)'
+        '--wide-pointwise',
+        required=True,
+        help='wide single-round pointwise ckpt (the failure case in A2 and A4)',
     )
     p.add_argument('--out-dir', default='figures/distributions/donuts/compare')
     p.add_argument('--steps', type=int, default=4, help='sweep steps per property in A2')
@@ -52,7 +53,7 @@ def property_reconstruction_compare(
     subfigs = [subfigs] if len(models) == 1 else list(subfigs)
 
     for sub, (name, model) in zip(subfigs, models.items(), strict=True):
-        sub.suptitle(name, fontweight='bold', fontsize=13)
+        sub.suptitle(name, fontweight='bold')
         axes = sub.subplots(len(RECON_PROPS), steps, squeeze=False)
         for row, prop in enumerate(RECON_PROPS):
             values, build, true_of = sweeps[prop]
@@ -61,21 +62,13 @@ def property_reconstruction_compare(
                 ax = axes[row][col]
                 draw_recon_panel(ax, model, build, value, true_of, prop, n_embed, n_gen, panel_key)
                 if col == 0:
-                    ax.set_ylabel(prop, fontsize=11)
+                    ax.set_ylabel(prop)
 
-    fig.text(
-        0.5,
-        0.01,
-        'Property reconstruction (grey: true, blue: generated; err = |decoded - true|)',
-        ha='center',
-        fontsize=11,
-    )
     save_figure(fig, out_path)
     print(f'Saved {out_path}')
 
 
 def _interpolation_path(model: FlowEmbedding, start: jax.Array, num_steps: int) -> jax.Array:
-    """Embed the two donuts and return the (2 + num_steps) interpolated z points."""
     zs = jax.vmap(model.embed, in_axes=(0, None))(start, jnp.ones(start.shape[1]))[0]
     a, b = zs[0:1], zs[1:2]
     mids = jnp.concatenate(
@@ -102,22 +95,25 @@ def interpolation_compare(
 
     num_steps = config.interpolation_num_steps
     total = 2 + num_steps
+    xlim, ylim = (-1.5, 1.5), (-2.5, 2.5)
+    aspect = (ylim[1] - ylim[0]) / (xlim[1] - xlim[0])
     fig, axes = plt.subplots(
-        len(rows), total, figsize=(2.3 * total, 2.6 * len(rows)), squeeze=False
+        len(rows), total, figsize=(2.3 * total, 2.3 * aspect * len(rows)), squeeze=False
     )
     for r, (name, model) in enumerate(rows):
         zs = _interpolation_path(model, start, num_steps)
         for c in range(total):
             ax = axes[r][c]
-            plot_model_density(model, zs[c], ax, (-1.5, 1.5), (-2.5, 2.5))
-            ax.set_xlim(-1.5, 1.5)
-            ax.set_ylim(-2.5, 2.5)
+            plot_model_density(model, zs[c], ax, xlim, ylim)
+            ax.set_xlim(*xlim)
+            ax.set_ylim(*ylim)
+            ax.set_aspect('equal')
             ax.set_xlabel(None)
             ax.set_ylabel(None)
             ax.set_xticks([])
             ax.set_yticks([])
             if c == 0:
-                ax.set_ylabel(name, fontsize=11)
+                ax.set_ylabel(name)
         if r == 0:
             axes[r][0].set_title('start')
             axes[r][-1].set_title('end')
@@ -133,16 +129,16 @@ def main() -> None:
     distribution = DonutDistributionConfig()
     key = jax.random.key(args.seed)
 
-    k_pw, k_st, k_wide = jax.random.split(key, 3)
-    pointwise = load(args.pointwise, k_pw)
+    k_st, k_wide = jax.random.split(key, 2)
     set_transformer = load(args.set_transformer, k_st)
     wide_pointwise = load(args.wide_pointwise, k_wide)
 
     os.makedirs(args.out_dir, exist_ok=True)
+    st_label, pw_label = 'Set Transformer (3 rounds)', 'Pointwise (1 round)'
 
     key, a2_key = jax.random.split(key, 2)
     property_reconstruction_compare(
-        {'Pointwise': pointwise, 'Set Transformer': set_transformer},
+        {pw_label: wide_pointwise, st_label: set_transformer},
         distribution,
         config,
         args.steps,
@@ -152,10 +148,7 @@ def main() -> None:
 
     key, a4_key = jax.random.split(key, 2)
     interpolation_compare(
-        [
-            ('Set Transformer (3 rounds)', set_transformer),
-            ('Pointwise (wide, 1 round)', wide_pointwise),
-        ],
+        [(st_label, set_transformer), (pw_label, wide_pointwise)],
         config,
         os.path.join(args.out_dir, 'interpolation.pdf'),
         a4_key,

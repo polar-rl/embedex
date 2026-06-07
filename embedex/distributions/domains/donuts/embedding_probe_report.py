@@ -212,11 +212,11 @@ def _plot_rounds(series: dict, n_eval: int, out: str) -> None:
                 if mech == 'depth' and len(xs) == len(ROUND_LABELS):
                     for lbl, x, y in zip(ROUND_LABELS, xk, ys, strict=True):
                         ax.annotate(
-                            lbl, (x, y), textcoords='offset points', xytext=(4, 5), fontsize=8
+                            lbl, (x, y), textcoords='offset points', xytext=(4, 5), fontsize=10
                         )
             ax.axhline(0, color='0.6', lw=0.8, zorder=0)
             ax.set_ylim(-25, 105)
-            ax.set_title(f'{CELL_DISPLAY.get(block, block)} · {target} variance explained')
+            ax.set_title(f'{CELL_DISPLAY.get(block, block)} · {target}')
             ax.xaxis.set_major_formatter(ScalarFormatter())
             ax.grid(True, alpha=0.3)
             if i == len(targets) - 1:
@@ -224,9 +224,7 @@ def _plot_rounds(series: dict, n_eval: int, out: str) -> None:
             if j == 0:
                 ax.set_ylabel('variance explained (%)')
 
-    # Single in-panel legend in the top-left panel's free region (every panel
-    # shows both mechanisms, so one legend documents the whole figure).
-    axes[0][0].legend(loc='center right', fontsize=10, framealpha=0.9, title='mechanism')
+    axes[0][0].legend(loc='center right', framealpha=0.9, title='mechanism')
     fig.suptitle(f'Parameter efficiency: depth vs. width (n_eval={n_eval})', y=0.99)
     fig.tight_layout(rect=(0, 0, 1, 0.96))
     save_figure(fig, out)
@@ -244,7 +242,7 @@ def _plot_size(series: dict, n_eval: int, out: str) -> None:
             es = [100 * mean_se(by_x[x][target])[1] for x in xs]
             ax.errorbar(xs, ys, yerr=es, marker='o', capsize=3, label=series_label(sk))
         ax.axhline(0, color='0.6', lw=0.8, zorder=0)
-        ax.set_title(f'{TARGET_LABEL[target]} variance explained')
+        ax.set_title(TARGET_LABEL[target])
         ax.set_xlabel('embedding\\_dim')
         ax.set_ylabel('variance explained (%)')
         ax.set_ylim(-25, 105)
@@ -253,7 +251,7 @@ def _plot_size(series: dict, n_eval: int, out: str) -> None:
         ax.xaxis.set_major_formatter(ScalarFormatter())
         ax.minorticks_off()
         ax.grid(True, alpha=0.3)
-        ax.legend(fontsize=8)
+        ax.legend()
     fig.suptitle(f'Structural decodability vs embedding\\_dim (n\\_eval={n_eval})')
     fig.tight_layout()
     save_figure(fig, out)

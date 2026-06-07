@@ -111,7 +111,7 @@ def plot_metric(curves: dict, metric: str, figure_dir: Path, fmt: str) -> Path:
     ax.minorticks_off()
     ax.set_xlabel('Embedding sample count (n_eval)')
     ax.set_ylabel(METRIC_LABELS[metric])
-    ax.legend(fontsize=12)
+    ax.legend()
     ax.grid(alpha=0.25)
     fig.tight_layout()
 

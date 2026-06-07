@@ -1,4 +1,20 @@
+import matplotlib as mpl
 import numpy as np
+
+PLOT_RC = {
+    'font.size': 12,
+    'axes.titlesize': 13,
+    'axes.labelsize': 13,
+    'xtick.labelsize': 11,
+    'ytick.labelsize': 11,
+    'legend.fontsize': 11,
+    'figure.titlesize': 14,
+}
+
+
+def apply_plot_style() -> None:
+    mpl.rcParams.update(PLOT_RC)
+
 
 CELL_DISPLAY = {
     'pointwise_fm': 'Pointwise (FM)',
