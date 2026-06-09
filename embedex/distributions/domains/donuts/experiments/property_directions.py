@@ -3,6 +3,7 @@ import os
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+import numpy as np
 
 from embedex.distributions.domains.donuts.config import ExperimentConfig
 from embedex.distributions.domains.donuts.donut import Donut, sample_batch
@@ -10,17 +11,61 @@ from embedex.distributions.embedding import FlowEmbedding
 from embedex.distributions.utils import plot_model_density
 from embedex.plotting import save_figure
 
+VIEW = (-4.5, 4.5)
+
+PROPERTY_LABELS = {
+    'radius': 'Radius',
+    'width': 'Width',
+    'pos_x': 'Position X',
+    'pos_y': 'Position Y',
+}
+
+
+def _radius_pair(key: jax.Array) -> tuple[Donut, Donut]:
+    mean = jax.random.normal(key, (2,)) * 0.5
+    return Donut(mean=mean, radius=0.8, width=0.25), Donut(mean=mean, radius=1.6, width=0.25)
+
+
+def _width_pair(key: jax.Array) -> tuple[Donut, Donut]:
+    mean = jax.random.normal(key, (2,)) * 0.5
+    return Donut(mean=mean, radius=1.2, width=0.1), Donut(mean=mean, radius=1.2, width=0.5)
+
+
+def _pos_x_pair(key: jax.Array) -> tuple[Donut, Donut]:
+    y = jax.random.normal(key, ()) * 0.5
+    return (
+        Donut(mean=jnp.array([-1.0, y]), radius=1.0, width=0.25),
+        Donut(mean=jnp.array([1.0, y]), radius=1.0, width=0.25),
+    )
+
+
+def _pos_y_pair(key: jax.Array) -> tuple[Donut, Donut]:
+    x = jax.random.normal(key, ()) * 0.5
+    return (
+        Donut(mean=jnp.array([x, -1.0]), radius=1.0, width=0.25),
+        Donut(mean=jnp.array([x, 1.0]), radius=1.0, width=0.25),
+    )
+
+
+PAIR_BUILDERS = {
+    'radius': _radius_pair,
+    'width': _width_pair,
+    'pos_x': _pos_x_pair,
+    'pos_y': _pos_y_pair,
+}
+
 
 def _compute_direction(
     model: FlowEmbedding,
-    donut_pairs: list[tuple[Donut, Donut]],
+    pair_builder,
+    num_pairs: int,
     num_samples: int,
     key: jax.Array,
 ) -> jax.Array:
     directions = []
-
-    for low_donut, high_donut in donut_pairs:
-        key, low_key, high_key = jax.random.split(key, 3)
+    for _ in range(num_pairs):
+        key, pair_key, low_key, high_key = jax.random.split(key, 4)
+        low_donut, high_donut = pair_builder(pair_key)
 
         low_samples = sample_batch([low_donut], num_samples, low_key)[0]
         high_samples = sample_batch([high_donut], num_samples, high_key)[0]
@@ -33,106 +78,91 @@ def _compute_direction(
     return jnp.mean(jnp.stack(directions), axis=0)
 
 
+def compute_property_directions(
+    model: FlowEmbedding,
+    config: ExperimentConfig,
+    key: jax.Array,
+    props: list[str] | None = None,
+) -> dict[str, jax.Array]:
+    """Average embedding-difference direction for each requested property."""
+    props = props or list(PAIR_BUILDERS)
+    directions = {}
+    for prop in props:
+        key, dir_key = jax.random.split(key, 2)
+        directions[prop] = _compute_direction(
+            model,
+            PAIR_BUILDERS[prop],
+            config.property_directions_num_pairs,
+            config.property_directions_num_samples,
+            dir_key,
+        )
+    return directions
+
+
+def base_embedding(model: FlowEmbedding, config: ExperimentConfig, key: jax.Array) -> jax.Array:
+    """Embedding of the canonical test donut that directions are added to."""
+    base_donut = Donut(mean=jnp.array([0.0, 0.0]), radius=1.0, width=0.25)
+    samples = sample_batch([base_donut], config.property_directions_num_samples, key)[0]
+    z, _ = model.embed(samples, jnp.ones(samples.shape[0]))
+    return z
+
+
+def draw_direction_panel(
+    ax,
+    model: FlowEmbedding,
+    z_base: jax.Array,
+    direction: jax.Array,
+    alpha: float,
+    num_samples: int,
+    key: jax.Array,
+) -> None:
+    """Decode the test embedding perturbed by ``alpha`` along ``direction``."""
+    generated = np.asarray(model.generate(z_base + alpha * direction, num_samples, key=key))
+    ax.scatter(generated[:, 0], generated[:, 1], s=5, alpha=0.5)
+    ax.set_xlim(*VIEW)
+    ax.set_ylim(*VIEW)
+    ax.set_aspect('equal')
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+
 def run_property_directions(
     model: FlowEmbedding,
     config: ExperimentConfig,
     save_path: str,
     key: jax.Array,
 ) -> None:
-    radius_pairs = []
-    for _ in range(config.property_directions_num_pairs):
-        key, mean_key = jax.random.split(key, 2)
-        mean = jax.random.normal(mean_key, (2,)) * 0.5
-        width = 0.25
-        low_donut = Donut(mean=mean, radius=0.8, width=width)
-        high_donut = Donut(mean=mean, radius=1.6, width=width)
-        radius_pairs.append((low_donut, high_donut))
+    key, dir_key, base_key = jax.random.split(key, 3)
+    directions = compute_property_directions(model, config, dir_key)
+    z_base = base_embedding(model, config, base_key)
 
-    width_pairs = []
-    for _ in range(config.property_directions_num_pairs):
-        key, mean_key = jax.random.split(key, 2)
-        mean = jax.random.normal(mean_key, (2,)) * 0.5
-        radius = 1.2
-        low_donut = Donut(mean=mean, radius=radius, width=0.1)
-        high_donut = Donut(mean=mean, radius=radius, width=0.5)
-        width_pairs.append((low_donut, high_donut))
+    steps = config.property_directions_num_alpha_steps
+    alphas = jnp.linspace(-1.5, 1.5, steps)
 
-    pos_x_pairs = []
-    for _ in range(config.property_directions_num_pairs):
-        key, y_key = jax.random.split(key, 2)
-        y = jax.random.normal(y_key, ()) * 0.5
-        radius, width = 1.0, 0.25
-        low_donut = Donut(mean=jnp.array([-1.0, y]), radius=radius, width=width)
-        high_donut = Donut(mean=jnp.array([1.0, y]), radius=radius, width=width)
-        pos_x_pairs.append((low_donut, high_donut))
-
-    pos_y_pairs = []
-    for _ in range(config.property_directions_num_pairs):
-        key, x_key = jax.random.split(key, 2)
-        x = jax.random.normal(x_key, ()) * 0.5
-        radius, width = 1.0, 0.25
-        low_donut = Donut(mean=jnp.array([x, -1.0]), radius=radius, width=width)
-        high_donut = Donut(mean=jnp.array([x, 1.0]), radius=radius, width=width)
-        pos_y_pairs.append((low_donut, high_donut))
-
-    key, radius_key, width_key, pos_x_key, pos_y_key = jax.random.split(key, 5)
-    d_radius = _compute_direction(
-        model, radius_pairs, config.property_directions_num_samples, radius_key
-    )
-    d_width = _compute_direction(
-        model, width_pairs, config.property_directions_num_samples, width_key
-    )
-    d_pos_x = _compute_direction(
-        model, pos_x_pairs, config.property_directions_num_samples, pos_x_key
-    )
-    d_pos_y = _compute_direction(
-        model, pos_y_pairs, config.property_directions_num_samples, pos_y_key
-    )
-
-    directions = [
-        ('radius', 'Radius', d_radius),
-        ('width', 'Width', d_width),
-        ('pos_x', 'Position X', d_pos_x),
-        ('pos_y', 'Position Y', d_pos_y),
-    ]
-
-    base_donut = Donut(mean=jnp.array([0.0, 0.0]), radius=1.0, width=0.25)
-    key, base_key = jax.random.split(key, 2)
-    base_samples = sample_batch([base_donut], config.property_directions_num_samples, base_key)[0]
-    z_base, _ = model.embed(base_samples, jnp.ones(base_samples.shape[0]))
-
-    alphas = jnp.linspace(-1.5, 1.5, config.property_directions_num_alpha_steps)
-
-    for slug, dir_name, direction in directions:
-        fig, axes = plt.subplots(
-            2,
-            config.property_directions_num_alpha_steps,
-            figsize=(3 * config.property_directions_num_alpha_steps, 6),
-        )
+    for slug, direction in directions.items():
+        fig, axes = plt.subplots(2, steps, figsize=(3 * steps, 6))
 
         for i, alpha in enumerate(alphas):
             key, gen_key = jax.random.split(key, 2)
-
-            z_perturbed = z_base + alpha * direction
-            generated = model.generate(
-                z_perturbed, config.property_directions_num_samples, key=gen_key
+            draw_direction_panel(
+                axes[0, i],
+                model,
+                z_base,
+                direction,
+                float(alpha),
+                config.property_directions_num_samples,
+                gen_key,
             )
+            axes[0, i].set_title(rf'$\alpha = {float(alpha):.1f}$')
 
-            axes[0, i].scatter(generated[:, 0], generated[:, 1], s=5, alpha=0.5)
-            axes[0, i].set_title(rf'$\alpha = {alpha:.1f}$')
-            axes[0, i].set_xlim(-4.5, 4.5)
-            axes[0, i].set_ylim(-4.5, 4.5)
-            axes[0, i].set_aspect('equal')
-            axes[0, i].grid(True)
-
-            plot_model_density(model, z_perturbed, axes[1, i], (-4.5, 4.5), (-4.5, 4.5))
-            axes[1, i].set_xlim(-4.5, 4.5)
-            axes[1, i].set_ylim(-4.5, 4.5)
+            plot_model_density(model, z_base + alpha * direction, axes[1, i], VIEW, VIEW)
+            axes[1, i].set_xlim(*VIEW)
+            axes[1, i].set_ylim(*VIEW)
             axes[1, i].set_aspect('equal')
             axes[1, i].grid(True)
 
         axes[0, 0].set_ylabel('Samples')
         axes[1, 0].set_ylabel('Density')
 
-        fig.suptitle(f'Property Direction: {dir_name}', fontsize=21)
+        fig.suptitle(f'Property Direction: {PROPERTY_LABELS[slug]}', fontsize=21)
         save_figure(fig, os.path.join(save_path, f'property_direction_{slug}.pdf'))

@@ -7,17 +7,19 @@ import matplotlib.pyplot as plt
 
 from embedex.checkpointing import load_ckpt
 from embedex.distributions.builder import build_from_config
-from embedex.distributions.domains.donuts.config import DonutDistributionConfig, ExperimentConfig
+from embedex.distributions.domains.donuts.config import ExperimentConfig
 from embedex.distributions.domains.donuts.donut import Donut, sample_batch
-from embedex.distributions.domains.donuts.experiments.property_reconstruction import (
-    _sweep,
-    draw_recon_panel,
+from embedex.distributions.domains.donuts.experiments.property_directions import (
+    PROPERTY_LABELS,
+    base_embedding,
+    compute_property_directions,
+    draw_direction_panel,
 )
 from embedex.distributions.embedding import FlowEmbedding
 from embedex.distributions.utils import plot_model_density
 from embedex.plotting import save_figure
 
-RECON_PROPS = ['radius', 'width']
+DIRECTION_PROPS = ['radius', 'width']
 
 
 def parse_args() -> argparse.Namespace:
@@ -29,7 +31,7 @@ def parse_args() -> argparse.Namespace:
         help='wide single-round pointwise ckpt (the failure case in A2 and A4)',
     )
     p.add_argument('--out-dir', default='figures/distributions/donuts/compare')
-    p.add_argument('--steps', type=int, default=4, help='sweep steps per property in A2')
+    p.add_argument('--steps', type=int, default=5, help='alpha steps per direction in A2')
     p.add_argument('--seed', type=int, default=0)
     return p.parse_args()
 
@@ -38,35 +40,41 @@ def load(path: str, key: jax.Array) -> FlowEmbedding:
     return load_ckpt(path, lambda c: build_from_config(c, dequantize=False, key=key))
 
 
-def property_reconstruction_compare(
+def property_vectors_compare(
     models: dict[str, FlowEmbedding],
-    distribution: DonutDistributionConfig,
     config: ExperimentConfig,
     steps: int,
     out_path: str,
     key: jax.Array,
 ) -> None:
-    n_embed = config.property_reconstruction_num_samples
-    n_gen = config.property_reconstruction_num_generated
-    sweeps = _sweep(distribution, steps)
+    alphas = jnp.linspace(-1.5, 1.5, steps)
+    n_gen = config.property_directions_num_samples
 
     fig = plt.figure(
-        figsize=(2.6 * steps, 2.6 * len(RECON_PROPS) * len(models) + 0.6), layout='constrained'
+        figsize=(2.6 * steps, 2.6 * len(DIRECTION_PROPS) * len(models) + 0.6), layout='constrained'
     )
     subfigs = fig.subfigures(len(models), 1)
     subfigs = [subfigs] if len(models) == 1 else list(subfigs)
 
     for sub, (name, model) in zip(subfigs, models.items(), strict=True):
         sub.suptitle(name, fontweight='bold')
-        axes = sub.subplots(len(RECON_PROPS), steps, squeeze=False)
-        for row, prop in enumerate(RECON_PROPS):
-            values, build, true_of = sweeps[prop]
-            for col, value in enumerate(values):
+        axes = sub.subplots(len(DIRECTION_PROPS), steps, squeeze=False)
+
+        key, dir_key, base_key = jax.random.split(key, 3)
+        directions = compute_property_directions(model, config, dir_key, props=DIRECTION_PROPS)
+        z_base = base_embedding(model, config, base_key)
+
+        for row, prop in enumerate(DIRECTION_PROPS):
+            for col, alpha in enumerate(alphas):
                 key, panel_key = jax.random.split(key, 2)
                 ax = axes[row][col]
-                draw_recon_panel(ax, model, build, value, true_of, prop, n_embed, n_gen, panel_key)
+                draw_direction_panel(
+                    ax, model, z_base, directions[prop], float(alpha), n_gen, panel_key
+                )
+                if row == 0:
+                    ax.set_title(rf'$\alpha = {float(alpha):.1f}$')
                 if col == 0:
-                    ax.set_ylabel(prop)
+                    ax.set_ylabel(PROPERTY_LABELS[prop])
 
     save_figure(fig, out_path, tight=False)
     print(f'Saved {out_path}')
@@ -127,7 +135,6 @@ def interpolation_compare(
 def main() -> None:
     args = parse_args()
     config = ExperimentConfig()
-    distribution = DonutDistributionConfig()
     key = jax.random.key(args.seed)
 
     k_st, k_wide = jax.random.split(key, 2)
@@ -138,12 +145,11 @@ def main() -> None:
     st_label, pw_label = 'Set Transformer (3 rounds)', 'Pointwise (1 round)'
 
     key, a2_key = jax.random.split(key, 2)
-    property_reconstruction_compare(
+    property_vectors_compare(
         {pw_label: wide_pointwise, st_label: set_transformer},
-        distribution,
         config,
         args.steps,
-        os.path.join(args.out_dir, 'property_reconstruction.pdf'),
+        os.path.join(args.out_dir, 'property_vectors.pdf'),
         a2_key,
     )
 

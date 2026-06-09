@@ -13,7 +13,6 @@ from embedex.distributions.domains.donuts.experiments import (
     run_interpolation,
     run_linear_functionals,
     run_property_directions,
-    run_property_reconstruction,
     run_width_analysis,
 )
 from embedex.distributions.domains.donuts.plots import generate_paper_plots
@@ -102,13 +101,6 @@ def main() -> None:
         print('\nRunning compositional disentanglement experiment...')
         key, comp_key = jax.random.split(key, 2)
         run_compositional(model, cfg.experiments, figure_save_dir, comp_key)
-
-    if cfg.experiments.property_reconstruction:
-        print('\nRunning property reconstruction experiment...')
-        key, recon_key = jax.random.split(key, 2)
-        run_property_reconstruction(
-            model, cfg.experiments, cfg.distribution, figure_save_dir, recon_key
-        )
 
 
 if __name__ == '__main__':

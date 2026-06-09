@@ -48,11 +48,6 @@ class ExperimentConfig:
     compositional: bool = True
     compositional_num_samples: int = 512
 
-    property_reconstruction: bool = True
-    property_reconstruction_num_samples: int = 128
-    property_reconstruction_num_generated: int = 512
-    property_reconstruction_num_steps: int = 5
-
 
 @dataclass
 class Config:
