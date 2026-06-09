@@ -7,10 +7,12 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from embedex.distributions.builder import count_parameters, load_ckpt
+from embedex.checkpointing import load_ckpt
+from embedex.distributions.builder import build_from_config
 from embedex.distributions.domains.donuts.config import DonutDistributionConfig
 from embedex.distributions.domains.donuts.donut import random_donuts, sample_batch
 from embedex.distributions.domains.donuts.evaluate_all import discover_runs, split_run_name
+from embedex.logger import count_params
 
 TARGETS = ['center_x', 'center_y', 'radius', 'width']
 
@@ -144,8 +146,11 @@ def main() -> None:
                     print(f'{run_name} @ n={n_eval}: already in probe results, skipping')
                     continue
                 if model is None:
-                    model = load_ckpt(str(ckpt_path), dequantize=False, key=jax.random.key(0))
-                    num_params = count_parameters(model)
+                    model = load_ckpt(
+                        str(ckpt_path),
+                        lambda c: build_from_config(c, dequantize=False, key=jax.random.key(0)),
+                    )
+                    num_params = count_params(model)
                 z = compute_embeddings(model, data, n_eval, args.dist_batch_size)
                 per_fold = linear_probe_r2(z, targets, args.num_folds, args.probe_seed)
                 row = result_row(run_name, seed, n_eval, num_params, per_fold, args)

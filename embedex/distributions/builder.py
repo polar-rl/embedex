@@ -1,8 +1,3 @@
-import json
-import os
-from dataclasses import asdict
-from typing import Any
-
 import distrax
 import equinox as eqx
 import jax
@@ -46,6 +41,10 @@ def create_model(config: ModelConfig, dequantize: bool, key: jax.Array) -> Distr
     )
 
     return FlowEmbedding(embedding_blocks, generator)
+
+
+def build_from_config(cfg: dict, dequantize: bool, key: jax.Array) -> DistributionEmbedding:
+    return create_model(build_dataclass(ModelConfig, cfg['model']), dequantize=dequantize, key=key)
 
 
 def create_embedding_blocks(
@@ -401,39 +400,3 @@ def create_conditioned_mlp(
             num_layers,
             key=key,
         )
-
-
-def count_parameters(model: eqx.Module) -> int:
-    leaves = jax.tree.leaves(eqx.filter(model, eqx.is_inexact_array))
-    return sum(leaf.size for leaf in leaves)
-
-
-# ---------------------------------------------------------------------------
-# Checkpoint serialization
-# ---------------------------------------------------------------------------
-
-
-def save_ckpt(model: eqx.Module, cfg: Any, step: int) -> str:
-    ckpt_dir = os.path.join(cfg.model_dir, cfg.run_name)
-    num_steps = cfg.training.num_iterations
-    ckpt_path = os.path.join(ckpt_dir, f'{step:0{len(str(num_steps))}}.eqx')
-    os.makedirs(ckpt_dir, exist_ok=True)
-
-    with open(ckpt_path, 'wb') as f:
-        f.write((json.dumps(asdict(cfg)) + '\n').encode())
-        eqx.tree_serialise_leaves(f, model)
-
-    return ckpt_path
-
-
-def load_ckpt(ckpt_path: str, dequantize: bool, key: jax.Array) -> eqx.Module:
-    with open(ckpt_path, 'rb') as f:
-        cfg = json.loads(f.readline().decode())
-        model_config = build_dataclass(ModelConfig, cfg['model'])
-        container = create_model(model_config, dequantize=dequantize, key=key)
-        return eqx.tree_deserialise_leaves(f, container)
-
-
-def select_last_ckpt(directory: str) -> str:
-    files = [f for f in os.listdir(directory) if f.endswith('.eqx')]
-    return os.path.join(directory, sorted(files)[-1])

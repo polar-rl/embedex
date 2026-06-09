@@ -15,7 +15,7 @@ from embedex.distributions.domains.markov_random_fields.evaluate import empirica
 from embedex.distributions.domains.markov_random_fields.mrf import MRF
 from embedex.distributions.embedding import FlowEmbedding
 from embedex.distributions.metrics import js_divergence
-from embedex.distributions.utils import save_figure
+from embedex.plotting import save_figure
 
 
 def _random_mrf(distribution: MRFDistributionConfig, key: jax.Array) -> MRF:

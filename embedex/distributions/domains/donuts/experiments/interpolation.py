@@ -7,7 +7,8 @@ import matplotlib.pyplot as plt
 from embedex.distributions.domains.donuts.config import ExperimentConfig
 from embedex.distributions.domains.donuts.donut import Donut, sample_batch
 from embedex.distributions.embedding import FlowEmbedding
-from embedex.distributions.utils import plot_model_density, save_figure
+from embedex.distributions.utils import plot_model_density
+from embedex.plotting import save_figure
 
 
 def run_interpolation(

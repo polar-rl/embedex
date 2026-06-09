@@ -9,11 +9,13 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from embedex.distributions.builder import count_parameters, load_ckpt
+from embedex.checkpointing import load_ckpt
+from embedex.distributions.builder import build_from_config
 from embedex.distributions.domains.donuts.baselines import KDEBaseline, OracleDonutFit
 from embedex.distributions.domains.donuts.config import DonutDistributionConfig
 from embedex.distributions.domains.donuts.donut import donut_moments, random_donuts, sample_batch
 from embedex.distributions.metrics import sliced_wasserstein_distance
+from embedex.logger import count_params
 
 N_EVAL_GRID = [16, 32, 64, 128, 256, 1024]
 NUM_SWD_PROJECTIONS = 1000
@@ -228,7 +230,10 @@ def main() -> None:
     for run_name, ckpt_path in discover_runs(Path(args.model_dir)):
         if args.runs is not None and run_name not in args.runs:
             continue
-        model = load_ckpt(str(ckpt_path), dequantize=False, key=jax.random.key(0))
+        model = load_ckpt(
+            str(ckpt_path),
+            lambda c: build_from_config(c, dequantize=False, key=jax.random.key(0)),
+        )
         _, seed = split_run_name(run_name)
 
         def chunk_fn(emb, hold, ref, means, radii, widths, key, model=model):
@@ -244,7 +249,7 @@ def main() -> None:
                 key,
             )
 
-        subjects.append((run_name, seed, count_parameters(model), chunk_fn))
+        subjects.append((run_name, seed, count_params(model), chunk_fn))
 
     with open(output, 'a') as f:
         for name, seed, num_params, chunk_fn in subjects:

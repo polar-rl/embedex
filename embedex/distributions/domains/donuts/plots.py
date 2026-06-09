@@ -18,7 +18,7 @@ from numpy.typing import NDArray
 from embedex.distributions.domains.donuts.config import VisualizationConfig
 from embedex.distributions.domains.donuts.donut import PAPER_DONUTS, Donut, sample_batch
 from embedex.distributions.embedding import FlowEmbedding
-from embedex.distributions.utils import save_figure
+from embedex.plotting import save_figure
 
 METRICS = ['nll', 'swd', 'center_error', 'radius_error', 'width_error']
 BASELINES = ['kde', 'oracle']

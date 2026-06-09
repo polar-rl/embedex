@@ -1,0 +1,273 @@
+import equinox as eqx
+import jax
+import jax.numpy as jnp
+import minfx.neptune_v2 as minfx
+
+from embedex.checkpointing import save_ckpt
+from embedex.functions.embedding import FunctionEmbedding
+from embedex.functions.families.config import DerivativesConfig, parse_args
+from embedex.functions.generator import Generator
+from embedex.functions.metrics import (
+    evaluate_mse,
+    evaluate_operator_mse,
+    evaluate_operator_rel_l2,
+    evaluate_rel_l2,
+)
+from embedex.functions.operator import OperatorMapping
+from embedex.functions.training import run_training_pipeline
+from embedex.functions.visualize import plot_operator_reconstruction, plot_samples_reconstruction
+from embedex.logger import log_cfg, safe_log
+
+
+class PolynomialGenerator:
+    """Generator for random polynomials of varying degrees."""
+
+    def __init__(
+        self,
+        x_range: tuple[float, float],
+        coeff_range: tuple[float, float],
+        max_degree: int,
+    ) -> None:
+        self.x_range = x_range
+        self.coeff_range = coeff_range
+        self.max_degree = max_degree
+
+    def _random_coeffs(self, degree: jax.Array, key: jax.Array) -> jax.Array:
+        """Sample coefficients for a polynomial of the given degree."""
+
+        low, high = self.coeff_range
+        coeffs = jax.random.uniform(key, (self.max_degree + 1,), minval=low, maxval=high)
+        coeffs = coeffs.at[degree].set(jnp.where(coeffs[degree] == 0, 1.0, coeffs[degree]))
+        mask = jnp.arange(self.max_degree + 1) <= degree
+
+        return coeffs * mask
+
+    def _sample_one(
+        self, degree: jax.Array, num_samples: int, key: jax.Array
+    ) -> tuple[jax.Array, jax.Array, jax.Array]:
+        """Sample a single polynomial of the given degree at random points."""
+
+        def _polynomial(x, coeffs):
+            return jnp.sum(coeffs * jnp.power(x, jnp.arange(coeffs.shape[0])))
+
+        low, high = self.x_range
+
+        coeffs_key, sample_key = jax.random.split(key)
+        coeffs = self._random_coeffs(degree, coeffs_key)
+
+        x = jax.random.uniform(sample_key, (num_samples,), minval=low, maxval=high)
+        y = jax.vmap(_polynomial, in_axes=(0, None))(x, coeffs)
+        dy = jax.vmap(jax.grad(_polynomial), in_axes=(0, None))(x, coeffs)
+
+        return x[:, jnp.newaxis], y[:, jnp.newaxis], dy[:, jnp.newaxis]
+
+    @eqx.filter_jit
+    def sample(
+        self, batch_size: int, num_samples: int, key: jax.Array
+    ) -> tuple[jax.Array, jax.Array, jax.Array]:
+        """Sample polynomials with degrees drawn uniformly from [0, max_degree]."""
+
+        key, degree_key = jax.random.split(key, 2)
+        degrees = jax.random.randint(
+            degree_key, (batch_size,), minval=0, maxval=self.max_degree + 1
+        )
+
+        return jax.vmap(self._sample_one, in_axes=(0, None, 0))(
+            degrees, num_samples, jax.random.split(key, batch_size)
+        )
+
+    @eqx.filter_jit
+    def sample_degree(
+        self, degree: int, batch_size: int, num_samples: int, key: jax.Array
+    ) -> tuple[jax.Array, jax.Array, jax.Array]:
+        return jax.vmap(self._sample_one, in_axes=(None, None, 0))(
+            degree, num_samples, jax.random.split(key, batch_size)
+        )
+
+
+class PolynomialDerivativeGenerator(PolynomialGenerator, Generator):
+    """Data generator for learning the differential operator: embed(f) -> embed(f')."""
+
+    def operator_input_size(self, cfg: DerivativesConfig) -> int:
+        return cfg.model.embedding_size
+
+    def operator_input(
+        self, embedding_network: FunctionEmbedding, x: jax.Array, y: jax.Array, dy: jax.Array
+    ) -> jax.Array:
+        return embedding_network.embed(x, y)
+
+    def operator_ground_truth(self, x: jax.Array, y: jax.Array, dy: jax.Array) -> jax.Array:
+        return dy
+
+
+def evaluate_embeddings(
+    cfg: DerivativesConfig,
+    embedding_network: FunctionEmbedding,
+    generator: PolynomialGenerator,
+    key: jax.Array,
+) -> None:
+    num_degrees = generator.max_degree + 1
+
+    def _eval_degree(degree, key):
+        xs, ys, *_ = generator.sample_degree(
+            degree, cfg.evaluation.num_eval_functions, cfg.training.num_samples, key
+        )
+
+        return evaluate_mse(embedding_network, xs, ys), evaluate_rel_l2(embedding_network, xs, ys)
+
+    eval_keys = jax.random.split(key, num_degrees)
+    mse_values, rel_l2_values = jax.vmap(_eval_degree)(jnp.arange(num_degrees), eval_keys)
+
+    mses = {}
+    for degree in range(num_degrees):
+        mses[f'Degree {degree}'] = mse_values[degree]
+        print(
+            f'Degree {degree}: MSE: {mse_values[degree]:.6f}; Rel L2: {rel_l2_values[degree]:.6f}'
+        )
+
+        if hasattr(cfg, 'run'):
+            safe_log(cfg.run, f'eval/embedding/mse/degree_{degree}', mse_values[degree])
+            safe_log(cfg.run, f'eval/embedding/rel_l2/degree_{degree}', rel_l2_values[degree])
+
+    overall_mse = jnp.mean(mse_values)
+    overall_rel_l2 = jnp.mean(rel_l2_values)
+    print(f'Overall: MSE: {overall_mse:.6f}; Rel L2: {overall_rel_l2:.6f}')
+
+    if hasattr(cfg, 'run'):
+        safe_log(cfg.run, 'eval/embedding/mse/overall', overall_mse)
+        safe_log(cfg.run, 'eval/embedding/rel_l2/overall', overall_rel_l2)
+
+    num_plots = min(4, num_degrees)
+
+    key, degree_key = jax.random.split(key, 2)
+    plot_degrees = jnp.sort(
+        jax.random.choice(degree_key, jnp.arange(num_degrees), (num_plots,), replace=False)
+    )
+
+    plot_keys = jax.random.split(key, num_plots)
+    xs, ys, _ = jax.vmap(generator.sample_degree, in_axes=(0, None, None, 0))(
+        plot_degrees, cfg.evaluation.num_plots, cfg.evaluation.num_eval_samples, plot_keys
+    )
+
+    plot_xs = {f'Degree {int(deg)}': xs[i] for i, deg in enumerate(plot_degrees)}
+    plot_ys = {f'Degree {int(deg)}': ys[i] for i, deg in enumerate(plot_degrees)}
+
+    plot_samples_reconstruction(
+        cfg,
+        embedding_network,
+        plot_xs,
+        plot_ys,
+        mses,
+        generator.x_range,
+        'Polynomial Embeddings',
+        'polynomial_embeddings_by_degree',
+    )
+
+
+def evaluate_differential_operator(
+    cfg: DerivativesConfig,
+    embedding_network: FunctionEmbedding,
+    operator_network: OperatorMapping,
+    generator: PolynomialDerivativeGenerator,
+    key: jax.Array,
+) -> None:
+    num_degrees = generator.max_degree + 1
+
+    def _eval_degree(degree, key):
+        xs, ys, dys = generator.sample_degree(
+            degree, cfg.evaluation.num_eval_functions, cfg.training.num_samples, key
+        )
+        mse = evaluate_operator_mse(embedding_network, operator_network, generator, xs, ys, dys)
+        rel_l2 = evaluate_operator_rel_l2(
+            embedding_network, operator_network, generator, xs, ys, dys
+        )
+
+        return mse, rel_l2
+
+    eval_keys = jax.random.split(key, num_degrees)
+    mse_values, rel_l2_values = jax.vmap(_eval_degree)(jnp.arange(num_degrees), eval_keys)
+
+    mses = {}
+    for degree in range(num_degrees):
+        mses[f'Degree {degree}'] = mse_values[degree]
+        print(
+            f'Degree {degree}: MSE: {mse_values[degree]:.6f}; Rel L2: {rel_l2_values[degree]:.6f}'
+        )
+
+        if hasattr(cfg, 'run'):
+            safe_log(cfg.run, f'eval/operator/mse/degree_{degree}', mse_values[degree])
+            safe_log(cfg.run, f'eval/operator/rel_l2/degree_{degree}', rel_l2_values[degree])
+
+    overall_mse = jnp.mean(mse_values)
+    overall_rel_l2 = jnp.mean(rel_l2_values)
+    print(f'Overall: MSE: {overall_mse:.6f}; Rel L2: {overall_rel_l2:.6f}')
+
+    if hasattr(cfg, 'run'):
+        safe_log(cfg.run, 'eval/operator/mse/overall', overall_mse)
+        safe_log(cfg.run, 'eval/operator/rel_l2/overall', overall_rel_l2)
+
+    num_plots = min(4, num_degrees)
+
+    key, degree_key = jax.random.split(key, 2)
+    plot_degrees = jnp.sort(
+        jax.random.choice(degree_key, jnp.arange(num_degrees), (num_plots,), replace=False)
+    )
+
+    x_low, x_high = generator.x_range
+    eval_grid = jnp.linspace(x_low, x_high, 256)[:, jnp.newaxis]
+    half = cfg.evaluation.num_eval_samples // 2
+
+    plot_keys = jax.random.split(key, num_plots)
+    xs, ys, dys = jax.vmap(generator.sample_degree, in_axes=(0, None, None, 0))(
+        plot_degrees, cfg.evaluation.num_plots, cfg.evaluation.num_eval_samples, plot_keys
+    )
+
+    plot_xs, plot_dys, plot_preds = {}, {}, {}
+    for i, deg in enumerate(plot_degrees):
+        name = f'Degree {int(deg)}'
+        plot_xs[name] = xs[i]
+        plot_dys[name] = dys[i]
+        zs = jax.vmap(embedding_network.embed)(xs[i][:, :half], ys[i][:, :half])
+        plot_preds[name] = jax.vmap(embedding_network.eval, in_axes=(None, 0))(
+            eval_grid, jax.vmap(operator_network)(zs)
+        )
+
+    plot_operator_reconstruction(
+        cfg,
+        plot_xs,
+        plot_dys,
+        eval_grid,
+        plot_preds,
+        mses,
+        generator.x_range,
+        "Learned Differential Operator: $D(\\mathrm{embed}(f)) \\approx \\mathrm{embed}(f')$",
+        "Ground Truth $f'$",
+        'Predicted $D(\\mathrm{embed}(f))$',
+        '$x$',
+        "$f'(x)$",
+        'polynomial_differential_operator_by_degree',
+    )
+
+
+def main(cfg: DerivativesConfig) -> None:
+    cfg.run = minfx.init_run(
+        project=cfg.project,
+        name=cfg.run_name,
+        tags=['function_embeddings', 'derivatives'],
+        mode='async' if not cfg.debug_mode else 'debug',
+    )
+    log_cfg(cfg.run, cfg)
+
+    generator = PolynomialDerivativeGenerator(
+        cfg.data.x_range, cfg.data.coeff_range, cfg.data.max_degree
+    )
+    embedding_network, operator_network = run_training_pipeline(
+        cfg, generator, evaluate_embeddings, evaluate_differential_operator
+    )
+
+    save_ckpt((embedding_network, operator_network), cfg, step=cfg.training.num_iterations)
+    cfg.run.stop()
+
+
+if __name__ == '__main__':
+    main(parse_args(DerivativesConfig))

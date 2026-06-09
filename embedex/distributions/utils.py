@@ -4,9 +4,9 @@ import jax
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import Colormap
-from matplotlib.figure import Figure
 
 from embedex.distributions.embedding import FlowEmbedding
+from embedex.plotting import save_figure
 
 
 def plot_loss_curve(
@@ -70,14 +70,3 @@ def plot_model_density(
 
     contour_fn = ax.contourf if fill else ax.contour
     contour_fn(xx, yy, density, levels=num_contour_levels, cmap=cmap)
-
-
-def save_figure(fig: Figure, path: str, tight: bool = True, **kwargs) -> None:
-    parent = os.path.dirname(path)
-    if parent:
-        os.makedirs(parent, exist_ok=True)
-
-    if tight:
-        fig.tight_layout()
-    fig.savefig(path, bbox_inches='tight', **kwargs)
-    plt.close(fig)

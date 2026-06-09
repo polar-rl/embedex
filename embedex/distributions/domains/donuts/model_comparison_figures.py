@@ -5,7 +5,8 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
-from embedex.distributions.builder import load_ckpt
+from embedex.checkpointing import load_ckpt
+from embedex.distributions.builder import build_from_config
 from embedex.distributions.domains.donuts.config import DonutDistributionConfig, ExperimentConfig
 from embedex.distributions.domains.donuts.donut import Donut, sample_batch
 from embedex.distributions.domains.donuts.experiments.property_reconstruction import (
@@ -13,7 +14,8 @@ from embedex.distributions.domains.donuts.experiments.property_reconstruction im
     draw_recon_panel,
 )
 from embedex.distributions.embedding import FlowEmbedding
-from embedex.distributions.utils import plot_model_density, save_figure
+from embedex.distributions.utils import plot_model_density
+from embedex.plotting import save_figure
 
 RECON_PROPS = ['radius', 'width']
 
@@ -33,7 +35,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def load(path: str, key: jax.Array) -> FlowEmbedding:
-    return load_ckpt(path, dequantize=False, key=key)
+    return load_ckpt(path, lambda c: build_from_config(c, dequantize=False, key=key))
 
 
 def property_reconstruction_compare(

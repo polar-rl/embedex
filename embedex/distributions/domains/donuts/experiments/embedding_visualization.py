@@ -9,7 +9,7 @@ from sklearn.decomposition import PCA
 from embedex.distributions.domains.donuts.config import DonutDistributionConfig, ExperimentConfig
 from embedex.distributions.domains.donuts.donut import random_donuts, sample_batch
 from embedex.distributions.embedding import FlowEmbedding
-from embedex.distributions.utils import save_figure
+from embedex.plotting import save_figure
 
 
 def run_embedding_visualization(
