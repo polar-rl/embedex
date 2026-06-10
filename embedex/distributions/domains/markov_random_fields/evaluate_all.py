@@ -84,12 +84,14 @@ def build_eval_set(dist: dict, args: argparse.Namespace, fam_id: str):
     log_pmfs = jax.vmap(lambda m: m.log_pmf())(mrfs)
     embed_data = np.asarray(sample_batch(mrfs, args.num_embed_samples, sample_key))
 
-    def floor_counts(log_pmf: jax.Array, key: jax.Array) -> jax.Array:
-        draws = jax.random.categorical(key, log_pmf, shape=(args.num_generated_samples,))
-        return jnp.bincount(draws, length=log_pmf.shape[0])
+    def floor_counts(log_pmf: jax.Array, key: jax.Array) -> np.ndarray:
+        draws = np.asarray(
+            jax.random.categorical(key, log_pmf, shape=(args.num_generated_samples,))
+        )
+        return np.bincount(draws, minlength=log_pmf.shape[0]).astype(float)
 
     floor_keys = jax.random.split(floor_key, args.num_distributions)
-    floor_pmfs = np.asarray(jax.vmap(floor_counts)(log_pmfs, floor_keys), dtype=float)
+    floor_pmfs = np.stack([floor_counts(lp, k) for lp, k in zip(log_pmfs, floor_keys, strict=True)])
     floor_pmfs /= args.num_generated_samples
 
     states = np.asarray(all_states(dist['num_spins'], dist['num_states']))

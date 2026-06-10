@@ -35,6 +35,22 @@ def model_log_pmf(
 
 
 @eqx.filter_jit
+def _model_pmfs_chunk(
+    model: FlowEmbedding,
+    data: jax.Array,
+    states: jax.Array,
+    num_embedding_samples: int,
+    num_evals: int,
+    keys: jax.Array,
+) -> jax.Array:
+    def model_pmf(data_i: jax.Array, eval_key: jax.Array) -> jax.Array:
+        embed_samples = data_i[:num_embedding_samples]
+        embedding, _ = model.embed(embed_samples, jnp.ones(embed_samples.shape[0]))
+        return jnp.exp(model_log_pmf(model, embedding, states, num_evals, eval_key))
+
+    return jax.vmap(model_pmf)(data, keys)
+
+
 def compute_metrics(
     model: FlowEmbedding,
     mrfs: MRF,
@@ -43,17 +59,23 @@ def compute_metrics(
     num_embedding_samples: int,
     num_evals: int,
     key: jax.Array,
+    chunk_size: int = 16,
 ) -> EvaluationMetrics:
     true_pmfs = jax.vmap(lambda m: m.pmf())(mrfs)
 
     keys = jax.random.split(key, data.shape[0])
-
-    def model_pmf(data_i: jax.Array, eval_key: jax.Array) -> jax.Array:
-        embed_samples = data_i[:num_embedding_samples]
-        embedding, _ = model.embed(embed_samples, jnp.ones(embed_samples.shape[0]))
-        return jnp.exp(model_log_pmf(model, embedding, states, num_evals, eval_key))
-
-    model_pmfs = jax.vmap(model_pmf)(data, keys)
+    chunks = [
+        _model_pmfs_chunk(
+            model,
+            data[start : start + chunk_size],
+            states,
+            num_embedding_samples,
+            num_evals,
+            keys[start : start + chunk_size],
+        )
+        for start in range(0, data.shape[0], chunk_size)
+    ]
+    model_pmfs = jnp.concatenate(chunks, axis=0)
     jsds = jax.vmap(js_divergence)(true_pmfs, model_pmfs)
 
     return EvaluationMetrics(mean_jsd=jnp.mean(jsds), std_jsd=jnp.std(jsds))
