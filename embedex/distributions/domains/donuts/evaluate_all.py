@@ -1,7 +1,5 @@
 import argparse
 import json
-import re
-import zlib
 from pathlib import Path
 
 import equinox as eqx
@@ -14,6 +12,7 @@ from embedex.distributions.builder import build_from_config
 from embedex.distributions.domains.donuts.baselines import KDEBaseline, OracleDonutFit
 from embedex.distributions.domains.donuts.config import DonutDistributionConfig
 from embedex.distributions.domains.donuts.donut import donut_moments, random_donuts, sample_batch
+from embedex.distributions.domains.experiment_utils import discover_runs, eval_key, split_run_name
 from embedex.distributions.metrics import sliced_wasserstein_distance
 from embedex.logger import count_params
 
@@ -34,29 +33,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--runs', nargs='*', default=None, help='Only evaluate these run names')
     parser.add_argument('--skip-baselines', action='store_true')
     return parser.parse_args()
-
-
-def discover_runs(model_dir: Path) -> list[tuple[str, Path]]:
-    runs = []
-    for run_dir in sorted(model_dir.iterdir()):
-        if run_dir.is_dir():
-            ckpts = sorted(run_dir.glob('*.eqx'))
-            if ckpts:
-                runs.append((run_dir.name, ckpts[-1]))
-    return runs
-
-
-def split_run_name(name: str) -> tuple[str, int | None]:
-    match = re.fullmatch(r'(.+)_s(\d+)', name)
-    if match:
-        return match.group(1), int(match.group(2))
-    return name, None
-
-
-def eval_key(eval_seed: int, name: str, n_eval: int) -> jax.Array:
-    key = jax.random.key(eval_seed)
-    key = jax.random.fold_in(key, zlib.crc32(name.encode()))
-    return jax.random.fold_in(key, n_eval)
 
 
 def param_errors(

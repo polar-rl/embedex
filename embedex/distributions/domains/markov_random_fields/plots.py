@@ -1,4 +1,7 @@
+import argparse
 import os
+from collections import defaultdict
+from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -7,15 +10,30 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.figure import Figure
 
+from embedex.distributions.domains.experiment_utils import (
+    apply_plot_style,
+    load_rows,
+    mean_se,
+    safe_nanmean,
+)
+from embedex.distributions.domains.markov_random_fields.aggregate import (
+    BASELINES,
+    CELL_DISPLAY,
+    FLOOR,
+    MODEL_CELLS,
+    base_cell,
+)
 from embedex.distributions.domains.markov_random_fields.config import (
     MRFDistributionConfig,
     VisualizationConfig,
 )
-from embedex.distributions.domains.markov_random_fields.evaluate import empirical_pmf
 from embedex.distributions.domains.markov_random_fields.mrf import MRF
+from embedex.distributions.domains.markov_random_fields.pmfs import empirical_pmf
 from embedex.distributions.embedding import FlowEmbedding
 from embedex.distributions.metrics import js_divergence
 from embedex.plotting import save_figure
+
+SERIES = [*MODEL_CELLS, FLOOR]
 
 
 def _random_mrf(distribution: MRFDistributionConfig, key: jax.Array) -> MRF:
@@ -227,9 +245,7 @@ def create_reconstruction_grid(
             model, mrf, config.num_embedding_samples, config.num_generated_samples, recon_key
         )
         recon_agree = _agreement(gen)
-        jsd = float(
-            js_divergence(mrf.pmf(), empirical_pmf(jnp.array(gen), mrf.num_spins, mrf.num_states))
-        )
+        jsd = float(js_divergence(mrf.pmf(), empirical_pmf(gen, mrf.num_spins, mrf.num_states)))
 
         row = idx // (ncols // 2)
         col_base = (idx % (ncols // 2)) * 2
@@ -292,3 +308,61 @@ def generate_paper_plots(
     fig = create_reconstruction_grid(model, distribution, config, grid_key)
     save_figure(fig, os.path.join(save_path, 'mrf_reconstruction_grid.pdf'))
     plt.close(fig)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--results', type=str, default='results/markov_random_fields/results.jsonl')
+    parser.add_argument(
+        '--figure-dir', type=str, default='figures/distributions/markov_random_fields/eval'
+    )
+    return parser.parse_args()
+
+
+def coupling_rows(rows: list[dict]) -> dict[tuple[str, float], list[float]]:
+    """Per-seed mean JSD keyed by (series, coupling), over the coupling-dial families."""
+    series_rows = defaultdict(list)
+    for row in rows:
+        dist = row['distribution']
+        if dist['num_states'] != 2 or row['cell'] in BASELINES:
+            continue
+        series = FLOOR if row['cell'] == FLOOR else base_cell(row['cell'])
+        if series is None:
+            continue
+        key = (series, float(dist['coupling_scale']))
+        series_rows[key].append(safe_nanmean(row['metrics']['jsd']['per_dist']))
+    return series_rows
+
+
+def create_coupling_figure(series_rows: dict[tuple[str, float], list[float]]) -> Figure:
+    couplings = sorted({coupling for _, coupling in series_rows})
+
+    fig, ax = plt.subplots(figsize=(5.5, 4.0))
+    for series in SERIES:
+        xs = [c for c in couplings if (series, c) in series_rows]
+        if not xs:
+            continue
+        means, ses = zip(*(mean_se(series_rows[(series, c)]) for c in xs), strict=True)
+        style = {'linestyle': '--', 'color': 'gray'} if series == FLOOR else {'marker': 'o'}
+        ax.errorbar(xs, means, yerr=ses, label=CELL_DISPLAY.get(series, series), **style)
+
+    ax.set_xscale('log', base=2)
+    ax.set_xticks(couplings, [f'{c:g}' for c in couplings])
+    ax.set_xlabel('coupling strength')
+    ax.set_ylabel('JSD (nats)')
+    ax.legend()
+    return fig
+
+
+def main() -> None:
+    args = parse_args()
+    apply_plot_style()
+
+    fig = create_coupling_figure(coupling_rows(load_rows(Path(args.results))))
+    path = str(Path(args.figure_dir) / 'jsd_vs_coupling.pdf')
+    save_figure(fig, path)
+    print(f'Wrote {path}')
+
+
+if __name__ == '__main__':
+    main()

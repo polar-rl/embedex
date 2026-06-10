@@ -1,20 +1,6 @@
-import matplotlib as mpl
-import numpy as np
-
-PLOT_RC = {
-    'font.size': 12,
-    'axes.titlesize': 13,
-    'axes.labelsize': 13,
-    'xtick.labelsize': 11,
-    'ytick.labelsize': 11,
-    'legend.fontsize': 11,
-    'figure.titlesize': 14,
-}
-
-
-def apply_plot_style() -> None:
-    mpl.rcParams.update(PLOT_RC)
-
+from embedex.distributions.domains.experiment_utils import PLOT_RC as PLOT_RC
+from embedex.distributions.domains.experiment_utils import apply_plot_style as apply_plot_style
+from embedex.distributions.domains.experiment_utils import mean_se as mean_se
 
 CELL_DISPLAY = {
     'pointwise_fm': 'Pointwise (FM)',
@@ -24,10 +10,3 @@ CELL_DISPLAY = {
     'kde': 'KDE',
     'oracle': 'Oracle',
 }
-
-
-def mean_se(values) -> tuple[float, float]:
-    """Mean and standard error over seeds (ddof=1; SE=0 for a single value)."""
-    arr = np.array(values, dtype=float)
-    se = float(arr.std(ddof=1) / np.sqrt(len(arr))) if len(arr) > 1 else 0.0
-    return float(arr.mean()), se

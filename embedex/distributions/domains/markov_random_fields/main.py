@@ -5,11 +5,9 @@ import jax
 from embedex.checkpointing import load_ckpt, save_ckpt
 from embedex.distributions.builder import build_from_config, create_model
 from embedex.distributions.domains.markov_random_fields.config import parse_args
-from embedex.distributions.domains.markov_random_fields.create_paper_plots import (
-    generate_paper_plots,
-)
 from embedex.distributions.domains.markov_random_fields.evaluate import evaluate
 from embedex.distributions.domains.markov_random_fields.mrf import random_mrfs, sample_batch
+from embedex.distributions.domains.markov_random_fields.plots import generate_paper_plots
 from embedex.distributions.training import train
 from embedex.distributions.utils import plot_loss_curve, plot_norm_curve
 from embedex.logger import count_params

@@ -23,15 +23,6 @@ class EvaluationMetrics(NamedTuple):
     std_jsd: jax.Array
 
 
-def empirical_pmf(samples: jax.Array, num_spins: int, num_states: int) -> jax.Array:
-    powers = num_states ** jnp.arange(num_spins)
-    cats = jnp.clip(jnp.round(samples), 0, num_states - 1).astype(jnp.int32)
-    indices = cats @ powers
-    counts = jnp.zeros(num_states**num_spins).at[indices].add(1.0)
-    total = counts.sum()
-    return jnp.where(total > 0, counts / total, jnp.ones_like(counts) / counts.shape[0])
-
-
 def model_log_pmf(
     model: FlowEmbedding,
     embedding: jax.Array,

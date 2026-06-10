@@ -1,5 +1,4 @@
 import argparse
-import json
 import re
 from collections import defaultdict
 from pathlib import Path
@@ -7,9 +6,15 @@ from pathlib import Path
 import numpy as np
 
 from embedex.distributions.domains.donuts.report_utils import CELL_DISPLAY, mean_se
+from embedex.distributions.domains.experiment_utils import (
+    cell_mean_se,
+    load_rows,
+    paired_bootstrap,
+    safe_nanmean,
+    seed_averaged_per_dist,
+)
 
 METRICS = ['nll', 'swd', 'center_error', 'radius_error', 'width_error']
-BOOTSTRAP_RESAMPLES = 10_000
 
 BASELINES = ['kde', 'oracle']
 METRIC_LABEL = {
@@ -58,32 +63,11 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_rows(path: Path) -> list[dict]:
-    with open(path) as f:
-        return [json.loads(line) for line in f]
-
-
 def group_by_cell(rows: list[dict]) -> dict[tuple[str, int], list[dict]]:
     groups = defaultdict(list)
     for row in rows:
         groups[(row['cell'], row['n_eval'])].append(row)
     return groups
-
-
-def _safe_nanmean(values) -> float:
-    """Mean over finite entries; NaN only if every entry is non-finite."""
-    arr = np.asarray(values, dtype=float)
-    mask = np.isfinite(arr)
-    return float(arr[mask].mean()) if mask.any() else float('nan')
-
-
-def cell_mean_se(rows: list[dict], metric: str) -> tuple[float, float, int]:
-    per_seed = np.array([_safe_nanmean(r['metrics'][metric]['per_dist']) for r in rows])
-    finite = per_seed[np.isfinite(per_seed)]
-    if len(finite) == 0:
-        return float('nan'), 0.0, 0
-    se = float(finite.std(ddof=1) / np.sqrt(len(finite))) if len(finite) > 1 else 0.0
-    return float(finite.mean()), se, len(finite)
 
 
 def summary_table(groups: dict, metrics: list[str], n_evals: list[int]) -> None:
@@ -258,21 +242,6 @@ def summary_latex(groups: dict, probe_rows: list[dict], n_eval: int) -> str:
     return '\n'.join(lines)
 
 
-def seed_averaged_per_dist(rows: list[dict], metric: str) -> np.ndarray:
-    stacked = np.array([r['metrics'][metric]['per_dist'] for r in rows], dtype=float)
-    mask = np.isfinite(stacked)
-    counts = mask.sum(axis=0)
-    summed = np.where(mask, stacked, 0.0).sum(axis=0)
-    return np.where(counts > 0, summed / np.maximum(counts, 1), np.nan)
-
-
-def paired_bootstrap(diffs: np.ndarray, rng: np.random.Generator) -> tuple[float, float, float]:
-    idx = rng.integers(0, len(diffs), size=(BOOTSTRAP_RESAMPLES, len(diffs)))
-    resampled = diffs[idx].mean(axis=1)
-    lo, hi = np.percentile(resampled, [2.5, 97.5])
-    return diffs.mean(), lo, hi
-
-
 def comparison_table(groups: dict, metrics: list[str], n_evals: list[int], seed: int) -> None:
     rng = np.random.default_rng(seed)
     cells = sorted({cell for cell, _ in groups})
@@ -324,8 +293,8 @@ def write_nan_report(rows: list[dict], path: Path) -> int:
                     total_nan += n_nan
                     ne_counts.append(f'  {r["name"]:<28} {metric:<13} {n_nan}/{len(vals)}')
             rate = r['metrics'].get('nan_rate')
-            if rate is not None and _safe_nanmean(rate['per_dist']) > 0:
-                ne_rates.append(f'  {r["name"]:<28} {_safe_nanmean(rate["per_dist"]):.5f}')
+            if rate is not None and safe_nanmean(rate['per_dist']) > 0:
+                ne_rates.append(f'  {r["name"]:<28} {safe_nanmean(rate["per_dist"]):.5f}')
         if ne_counts:
             count_lines.append(f'n_eval={n_eval}')
             count_lines.extend(ne_counts)

@@ -27,6 +27,11 @@ def load_ckpt(ckpt_path: str, build_model: Callable[[dict], eqx.Module]) -> eqx.
         return eqx.tree_deserialise_leaves(f, build_model(cfg))
 
 
+def read_ckpt_config(ckpt_path: str) -> dict:
+    with open(ckpt_path, 'rb') as f:
+        return json.loads(f.readline().decode())
+
+
 def select_last_ckpt(directory: str) -> str:
     files = [f for f in os.listdir(directory) if f.endswith('.eqx')]
     return os.path.join(directory, sorted(files)[-1])

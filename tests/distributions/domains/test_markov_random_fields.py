@@ -2,13 +2,13 @@ import jax
 import numpy as np
 import pytest
 
-from embedex.distributions.domains.markov_random_fields.evaluate import empirical_pmf
 from embedex.distributions.domains.markov_random_fields.mrf import (
     MRF,
     all_states,
     random_mrfs,
     sample_batch,
 )
+from embedex.distributions.domains.markov_random_fields.pmfs import empirical_pmf
 from embedex.distributions.metrics import js_divergence
 
 

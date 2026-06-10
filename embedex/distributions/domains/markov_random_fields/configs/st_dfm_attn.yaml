@@ -1,0 +1,43 @@
+model:
+  embedding:
+    block_type: set_transformer
+    embedding_dim: 16
+    hidden_size: 64
+    num_rounds: 3
+    num_heads: 4
+    num_inducing: 16
+  generator:
+    flow_type: dfm
+    conditioning: concat
+    dfm_num_classes: 2
+    dfm_time_embed_dim: 16
+    dfm_num_steps: 200
+    dfm_denoiser: attention
+    dfm_attn_token_dim: 32
+    dfm_attn_num_heads: 4
+    dfm_attn_num_layers: 4
+    dfm_attn_ff_multiplier: 4
+    dfm_attn_num_cond_tokens: 0
+
+training:
+  learning_rate: 1e-3
+  num_iterations: 50000
+  batch_size: 32
+  num_samples: 128
+  seed: 0
+
+distribution:
+  num_spins: 12
+  num_states: 2
+  coupling_scale: 1.0
+  bias_scale: 0.5
+  graph_type: random_edge_fixed_prob
+  edge_prob: 0.5
+
+evaluation:
+  num_distributions: 256
+  num_embedding_samples: 128
+  num_logprob_evals: 8
+
+run_name: dfm_attn
+seed: 0
