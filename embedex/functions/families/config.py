@@ -30,6 +30,17 @@ class DampedOscillatorDataConfig(DataConfig):
 
 
 @dataclass
+class LotkaVolterraDataConfig(DataConfig):
+    t_range: tuple[float, float] = (0.0, 10.0)
+    x0_range: tuple[float, float] = (0.5, 2.0)
+    y0_range: tuple[float, float] = (0.5, 2.0)
+    alpha_range: tuple[float, float] = (0.8, 1.5)  # Prey growth
+    beta_range: tuple[float, float] = (0.8, 1.5)  # Predation
+    gamma_range: tuple[float, float] = (0.8, 1.5)  # Predator death
+    delta_range: tuple[float, float] = (0.8, 1.5)  # Predator growth from predation
+
+
+@dataclass
 class DerivativesConfig(Config):
     data: PolynomialConfig = field(default_factory=PolynomialConfig)
 
@@ -59,6 +70,14 @@ class DampedOscillatorConfig(Config):
 
     model_dir: str = 'models/functions/damped_oscillator'
     figure_dir: str = 'figures/functions/damped_oscillator'
+
+
+@dataclass
+class LotkaVolterraConfig(Config):
+    data: LotkaVolterraDataConfig = field(default_factory=LotkaVolterraDataConfig)
+
+    model_dir: str = 'models/functions/lotka_volterra'
+    figure_dir: str = 'figures/functions/lotka_volterra'
 
 
 def load_config[T](cfg_cls: type[T], path: str) -> T:

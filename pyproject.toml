@@ -5,6 +5,7 @@ description = 'Learnable embeddings of higher-order objects, such as distributio
 readme = 'README.md'
 requires-python = '>=3.13,<3.14'
 dependencies = [
+    'diffrax>=0.7.2',
     'distrax>=0.1.7',
     'equinox>=0.13.5',
     'jax>=0.9.1',
@@ -38,7 +39,7 @@ include = ['embedex*']
 
 [tool.pytest.ini_options]
 filterwarnings = [
-    # tensorflow_probability (pulled in by distrax) still touches deprecated jax internals.
+    # `tensorflow_probability` still touches deprecated JAX internals.
     'ignore:jax.core.pytype_aval_mappings is deprecated:DeprecationWarning',
 ]
 
