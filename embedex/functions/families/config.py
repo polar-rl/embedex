@@ -9,6 +9,7 @@ from embedex.functions.config import Config, DataConfig
 class PolynomialConfig(DataConfig):
     x_range: tuple[float, float] = (-4.0, 4.0)
     coeff_range: tuple[float, float] = (-5.0, 5.0)
+    min_degree: int = 0
     max_degree: int = 3
 
 

@@ -127,7 +127,7 @@ def main(cfg: AntiderivativesConfig) -> None:
     log_cfg(cfg.run, cfg)
 
     generator = PolynomialAntiderivativeGenerator(
-        cfg.data.x_range, cfg.data.coeff_range, cfg.data.max_degree
+        cfg.data.x_range, cfg.data.coeff_range, cfg.data.min_degree, cfg.data.max_degree
     )
     embedding_network, operator_network = run_training_pipeline(
         cfg, generator, evaluate_embeddings, evaluate_antiderivative_operator

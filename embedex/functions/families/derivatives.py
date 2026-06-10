@@ -26,10 +26,12 @@ class PolynomialGenerator:
         self,
         x_range: tuple[float, float],
         coeff_range: tuple[float, float],
+        min_degree: int,
         max_degree: int,
     ) -> None:
         self.x_range = x_range
         self.coeff_range = coeff_range
+        self.min_degree = min_degree
         self.max_degree = max_degree
 
     def _random_coeffs(self, degree: jax.Array, key: jax.Array) -> jax.Array:
@@ -65,11 +67,11 @@ class PolynomialGenerator:
     def sample(
         self, batch_size: int, num_samples: int, key: jax.Array
     ) -> tuple[jax.Array, jax.Array, jax.Array]:
-        """Sample polynomials with degrees drawn uniformly from [0, max_degree]."""
+        """Sample polynomials with degrees drawn uniformly from [min_degree, max_degree]."""
 
         key, degree_key = jax.random.split(key, 2)
         degrees = jax.random.randint(
-            degree_key, (batch_size,), minval=0, maxval=self.max_degree + 1
+            degree_key, (batch_size,), minval=self.min_degree, maxval=self.max_degree + 1
         )
 
         return jax.vmap(self._sample_one, in_axes=(0, None, 0))(
@@ -259,7 +261,7 @@ def main(cfg: DerivativesConfig) -> None:
     log_cfg(cfg.run, cfg)
 
     generator = PolynomialDerivativeGenerator(
-        cfg.data.x_range, cfg.data.coeff_range, cfg.data.max_degree
+        cfg.data.x_range, cfg.data.coeff_range, cfg.data.min_degree, cfg.data.max_degree
     )
     embedding_network, operator_network = run_training_pipeline(
         cfg, generator, evaluate_embeddings, evaluate_differential_operator
