@@ -13,6 +13,23 @@ class PolynomialConfig(DataConfig):
 
 
 @dataclass
+class LogisticDataConfig(DataConfig):
+    t_range: tuple[float, float] = (0.0, 5.0)
+    y0_range: tuple[float, float] = (0.1, 2.0)
+    r_range: tuple[float, float] = (0.5, 3.0)
+    K_range: tuple[float, float] = (1.0, 5.0)
+
+
+@dataclass
+class DampedOscillatorDataConfig(DataConfig):
+    t_range: tuple[float, float] = (0.0, 10.0)
+    x0_range: tuple[float, float] = (-2.0, 2.0)
+    v0_range: tuple[float, float] = (-2.0, 2.0)
+    gamma_range: tuple[float, float] = (0.1, 1.0)
+    omega_range: tuple[float, float] = (0.5, 3.0)
+
+
+@dataclass
 class DerivativesConfig(Config):
     data: PolynomialConfig = field(default_factory=PolynomialConfig)
 
@@ -26,6 +43,22 @@ class AntiderivativesConfig(Config):
 
     model_dir: str = 'models/functions/antiderivatives'
     figure_dir: str = 'figures/functions/antiderivatives'
+
+
+@dataclass
+class LogisticConfig(Config):
+    data: LogisticDataConfig = field(default_factory=LogisticDataConfig)
+
+    model_dir: str = 'models/functions/logistic'
+    figure_dir: str = 'figures/functions/logistic'
+
+
+@dataclass
+class DampedOscillatorConfig(Config):
+    data: DampedOscillatorDataConfig = field(default_factory=DampedOscillatorDataConfig)
+
+    model_dir: str = 'models/functions/damped_oscillator'
+    figure_dir: str = 'figures/functions/damped_oscillator'
 
 
 def load_config[T](cfg_cls: type[T], path: str) -> T:

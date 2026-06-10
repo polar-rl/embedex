@@ -48,8 +48,8 @@ def run_training_pipeline(
             train_key,
         )
 
-        embedding_eval_fn(cfg, embedding_network, generator, eval_key)
-        operator_eval_fn(cfg, embedding_network, operator_network, generator, eval_key)
+        embedding_eval_fn(cfg, embedding_network, generator, key=eval_key)
+        operator_eval_fn(cfg, embedding_network, operator_network, generator, key=eval_key)
 
         return embedding_network, operator_network
 
@@ -64,7 +64,7 @@ def run_training_pipeline(
     else:
         key, train_key, eval_key = jax.random.split(key, 3)
         embedding_network = train_function_embeddings(cfg, embedding_network, generator, train_key)
-        embedding_eval_fn(cfg, embedding_network, generator, eval_key)
+        embedding_eval_fn(cfg, embedding_network, generator, key=eval_key)
 
     if not cfg.training.train_operator:
         return embedding_network, None
@@ -80,7 +80,7 @@ def run_training_pipeline(
         generator,
         train_key,
     )
-    operator_eval_fn(cfg, embedding_network, operator_network, generator, eval_key)
+    operator_eval_fn(cfg, embedding_network, operator_network, generator, key=eval_key)
 
     return embedding_network, operator_network
 

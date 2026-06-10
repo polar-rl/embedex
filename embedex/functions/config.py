@@ -67,7 +67,7 @@ class TrainingConfig:
 class EvaluationConfig:
     num_eval_functions: int = 1024
     num_eval_samples: int = 256
-    num_plots: int = 3
+    num_eval_plots: int = 3
 
 
 @dataclass

@@ -32,7 +32,7 @@ def plot_samples_reconstruction(
     for ax, title in zip(axes, titles, strict=True):
         xi, yi = xs[title], ys[title]
 
-        for i in range(cfg.evaluation.num_plots):
+        for i in range(cfg.evaluation.num_eval_plots):
             zi = embedding_network.embed(
                 xi[i, : cfg.evaluation.num_eval_samples // 2],
                 yi[i, : cfg.evaluation.num_eval_samples // 2],
@@ -75,16 +75,7 @@ def plot_samples_reconstruction(
         ax.set_ylabel('f(x)')
 
         if title in mses:
-            ax.text(
-                0.95,
-                0.05,
-                f'MSE = {mses[title]:.4f}',
-                transform=ax.transAxes,
-                ha='right',
-                va='bottom',
-                fontsize='small',
-                bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8),
-            )
+            _annotate_mse(ax, mses[title])
 
     axes[0].legend(loc='best', fontsize='small')
     fig.suptitle(suptitle, fontsize=13)
@@ -116,7 +107,7 @@ def plot_operator_reconstruction(
     for ax, title in zip(axes, titles, strict=True):
         xi, yi, pi = xs[title], ys[title], preds[title]
 
-        for i in range(cfg.evaluation.num_plots):
+        for i in range(cfg.evaluation.num_eval_plots):
             color = f'C{i}'
 
             order = jnp.argsort(xi[i, :, 0])
@@ -142,17 +133,126 @@ def plot_operator_reconstruction(
         ax.set_ylabel(y_label)
 
         if title in mses:
-            ax.text(
-                0.95,
-                0.05,
-                f'MSE = {mses[title]:.4f}',
-                transform=ax.transAxes,
-                ha='right',
-                va='bottom',
-                fontsize='small',
-                bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8),
-            )
+            _annotate_mse(ax, mses[title])
 
     axes[0].legend(loc='best', fontsize='small')
     fig.suptitle(suptitle, fontsize=13)
     save_figure(fig, os.path.join(cfg.figure_dir, cfg.run_name, f'{filename}.png'))
+
+
+def plot_reconstruction(
+    cfg: Config,
+    ts: jax.Array,
+    ys: jax.Array,
+    eval_grid: jax.Array,
+    preds: jax.Array,
+    mse: float,
+    *,
+    suptitle: str,
+    filename: str,
+    gt_label: str = 'Ground truth',
+    pred_label: str = 'Prediction',
+    x_label: str = '$t$',
+    y_label: str = '$y(t)$',
+) -> None:
+    fig, ax = plt.subplots(figsize=(6.0, 4.5))
+    t_pred = np.asarray(eval_grid[:, 0])
+
+    for i in range(ts.shape[0]):
+        color = f'C{i}'
+        order = jnp.argsort(ts[i, :, 0])
+
+        ax.plot(
+            np.asarray(ts[i, order, 0]),
+            np.asarray(ys[i, order, 0]),
+            ':',
+            color=color,
+            alpha=0.6,
+            label=gt_label if i == 0 else None,
+        )
+        ax.plot(
+            t_pred,
+            np.asarray(preds[i, :, 0]),
+            '-',
+            color=color,
+            label=pred_label if i == 0 else None,
+        )
+
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    ax.legend(loc='best', fontsize='small')
+
+    _annotate_mse(ax, mse)
+
+    fig.suptitle(suptitle, fontsize=13)
+    save_figure(fig, os.path.join(cfg.figure_dir, cfg.run_name, f'{filename}.png'))
+
+
+def plot_phase_portrait(
+    cfg: Config,
+    ts: jax.Array,
+    ys: jax.Array,
+    eval_grid: jax.Array,
+    preds: jax.Array,
+    mse: float,
+    *,
+    suptitle: str,
+    filename: str,
+    gt_label: str = 'Ground Truth Solution',
+    pred_label: str = 'Predicted Solution',
+    component_labels: tuple[str, str] = ('$x(t)$', '$v(t)$'),
+    phase_labels: tuple[str, str] = ('$x$', '$v$'),
+) -> None:
+    fig, (ax_0, ax_1, ax_phase) = plt.subplots(1, 3, figsize=(15, 4.5))
+    t_pred = np.asarray(eval_grid[:, 0])
+
+    for i in range(ts.shape[0]):
+        color = f'C{i}'
+        order = jnp.argsort(ts[i, :, 0])
+
+        t_gt = np.asarray(ts[i, order, 0])
+        c0_gt, c1_gt = np.asarray(ys[i, order, 0]), np.asarray(ys[i, order, 1])
+        c0_pr, c1_pr = np.asarray(preds[i, :, 0]), np.asarray(preds[i, :, 1])
+
+        ax_0.plot(t_gt, c0_gt, ':', color=color, alpha=0.5, label=gt_label if i == 0 else None)
+        ax_0.plot(t_pred, c0_pr, '-', color=color, label=pred_label if i == 0 else None)
+
+        ax_1.plot(t_gt, c1_gt, ':', color=color, alpha=0.5, label=gt_label if i == 0 else None)
+        ax_1.plot(t_pred, c1_pr, '-', color=color, label=pred_label if i == 0 else None)
+
+        ax_phase.plot(c0_gt, c1_gt, ':', color=color, alpha=0.5, label=gt_label if i == 0 else None)
+        ax_phase.plot(c0_pr, c1_pr, '-', color=color, label=pred_label if i == 0 else None)
+
+    ax_0.set_title(component_labels[0])
+    ax_0.set_xlabel('$t$')
+    ax_0.set_ylabel(component_labels[0])
+    ax_0.legend(loc='best', fontsize='small')
+
+    ax_1.set_title(component_labels[1])
+    ax_1.set_xlabel('$t$')
+    ax_1.set_ylabel(component_labels[1])
+    ax_1.legend(loc='best', fontsize='small')
+
+    ax_phase.set_title('Phase Portrait')
+    ax_phase.set_xlabel(phase_labels[0])
+    ax_phase.set_ylabel(phase_labels[1])
+    ax_phase.legend(loc='best', fontsize='small')
+    ax_phase.set_aspect('equal', adjustable='datalim')
+
+    _annotate_mse(ax_0, mse)
+
+    fig.suptitle(suptitle, fontsize=13)
+    save_figure(fig, os.path.join(cfg.figure_dir, cfg.run_name, f'{filename}.png'))
+
+
+def _annotate_mse(ax: plt.Axes, mse: float) -> None:
+    ax.text(
+        0.95,
+        0.05,
+        f'MSE = {float(mse):.4f}',
+        transform=ax.transAxes,
+        ha='right',
+        va='bottom',
+        fontsize='small',
+        bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8),
+    )

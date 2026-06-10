@@ -84,7 +84,7 @@ def evaluate_antiderivative_operator(
 
     plot_keys = jax.random.split(key, num_plots)
     xs, ys, dys = jax.vmap(generator.sample_degree, in_axes=(0, None, None, 0))(
-        plot_degrees, cfg.evaluation.num_plots, cfg.evaluation.num_eval_samples, plot_keys
+        plot_degrees, cfg.evaluation.num_eval_plots, cfg.evaluation.num_eval_samples, plot_keys
     )
 
     plot_xs, plot_ys, plot_preds = {}, {}, {}
