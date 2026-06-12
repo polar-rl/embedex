@@ -28,6 +28,8 @@ class DampedOscillatorDataConfig(DataConfig):
     v0_range: tuple[float, float] = (-2.0, 2.0)
     gamma_range: tuple[float, float] = (0.1, 1.0)
     omega_range: tuple[float, float] = (0.5, 3.0)
+    coupling_range: tuple[float, float] = (0.5, 1.5)
+    num_masses: int = 1
 
 
 @dataclass
