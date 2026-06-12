@@ -18,9 +18,10 @@ class EmbeddingConfig:
 
 @dataclass
 class GeneratorConfig:
-    flow_type: Literal['nf', 'fm', 'dfm'] = 'nf'
+    flow_type: Literal['nf', 'fm', 'dfm', 'ar'] = 'nf'
     conditioning: Literal['concat', 'film', 'hyper'] = 'concat'
     # Normalizing Flow
+    nf_dequant_type: Literal['learned', 'uniform'] = 'learned'
     nf_condition_dequant: bool = True
     nf_dequant_hidden_size: int = 64
     nf_dequant_num_layers: int = 2
@@ -46,6 +47,12 @@ class GeneratorConfig:
     dfm_attn_num_layers: int = 4
     dfm_attn_ff_multiplier: int = 4
     dfm_attn_num_cond_tokens: int = 0  # 0 = auto-infer from conditioning_dim
+    # Autoregressive (causal transformer)
+    ar_num_classes: int = 2
+    ar_token_dim: int = 48
+    ar_num_heads: int = 4
+    ar_num_layers: int = 5
+    ar_ff_multiplier: int = 4
 
 
 @dataclass

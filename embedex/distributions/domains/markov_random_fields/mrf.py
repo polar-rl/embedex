@@ -36,7 +36,10 @@ class MRF(eqx.Module):
     def log_pmf(self) -> jax.Array:
         onehot = self._onehot()
         field = jnp.einsum('mic,ic->m', onehot, self.h)
-        coupling = 0.5 * jnp.einsum('mia,mjb,ijab->m', onehot, onehot, self.J)
+        # Reassociate so the (m, j, b) intermediate stays small (avoids the giant
+        # 'mia,mjb->mijab' tensor that OOMs at large num_spins).
+        partial = jnp.einsum('mia,ijab->mjb', onehot, self.J)
+        coupling = 0.5 * jnp.einsum('mjb,mjb->m', partial, onehot)
         energies = field + coupling
         return energies - jax.nn.logsumexp(energies)
 
@@ -44,7 +47,12 @@ class MRF(eqx.Module):
         return jnp.exp(self.log_pmf())
 
     def sample(self, num_samples: int, key: jax.Array) -> jax.Array:
-        indices = jax.random.categorical(key, self.log_pmf(), shape=(num_samples,))
+        # Inverse-CDF sampling: cumsum once + searchsorted is O(num_samples + 2^N)
+        # memory, vs categorical's O(num_samples * 2^N) gumbel tensor which OOMs
+        # (under vmap) at large num_spins.
+        cdf = jnp.cumsum(jnp.exp(self.log_pmf()))
+        u = jax.random.uniform(key, (num_samples,)) * cdf[-1]
+        indices = jnp.clip(jnp.searchsorted(cdf, u, side='right'), 0, cdf.shape[0] - 1)
         return self.states[indices].astype(jnp.float32)
 
     def single_marginals(self) -> jax.Array:

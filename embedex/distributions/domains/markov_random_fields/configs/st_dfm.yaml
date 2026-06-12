@@ -1,8 +1,8 @@
 model:
   embedding:
     block_type: set_transformer
-    embedding_dim: 16
-    hidden_size: 64
+    embedding_dim: 32
+    hidden_size: 128
     num_rounds: 3
     num_heads: 4
     num_inducing: 16
@@ -10,16 +10,18 @@ model:
     flow_type: dfm
     conditioning: concat
     dfm_num_classes: 2
-    dfm_hidden_size: 132
-    dfm_num_layers: 5
+    dfm_hidden_size: 200
+    dfm_num_layers: 6
     dfm_time_embed_dim: 16
     dfm_num_steps: 200
 
 training:
   learning_rate: 1e-3
-  num_iterations: 50000
+  end_learning_rate: 1e-5
+  warmup_steps: 1000
+  num_iterations: 100000
   batch_size: 32
-  num_samples: 128
+  num_samples: 512
   seed: 0
 
 distribution:
@@ -32,7 +34,7 @@ distribution:
 
 evaluation:
   num_distributions: 256
-  num_embedding_samples: 128
+  num_embedding_samples: 256
   num_logprob_evals: 8
 
 run_name: dfm

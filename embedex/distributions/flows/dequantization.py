@@ -67,3 +67,37 @@ class Dequantize(Flow):
         key: jax.Array | None = None,
     ) -> tuple[jax.Array, jax.Array]:
         return jnp.round(x), ldj
+
+
+class UniformDequantize(Flow):
+    """Fixed uniform dequantization: u ~ U(-0.5, 0.5), log q(u) = 0.
+
+    Forward:  x_int → x_int + u,  ldj += -log q(u) = 0  (uniform density is 1 on
+              the unit-width bin, so it contributes nothing to the log-det term)
+    Inverse:  x_cont → round(x_cont)
+
+    Unlike the learned `Dequantize`, there is no noise network, so the noise
+    distribution cannot collapse to a deterministic (zero-entropy) point.
+    """
+
+    def _forward(
+        self,
+        x: jax.Array,
+        ldj: jax.Array,
+        sideinfo: jax.Array | None = None,
+        params: jax.Array | None = None,
+        key: jax.Array | None = None,
+    ) -> tuple[jax.Array, jax.Array]:
+        assert key is not None, 'UniformDequantize requires a PRNG key'
+        u = jax.random.uniform(key, x.shape, minval=-0.5, maxval=0.5)
+        return x + u, ldj
+
+    def _inverse(
+        self,
+        x: jax.Array,
+        ldj: jax.Array,
+        sideinfo: jax.Array | None = None,
+        params: jax.Array | None = None,
+        key: jax.Array | None = None,
+    ) -> tuple[jax.Array, jax.Array]:
+        return jnp.round(x), ldj

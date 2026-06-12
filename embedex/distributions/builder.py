@@ -16,7 +16,12 @@ from embedex.distributions.embedding import (
     PointwiseBlock,
     SetTransformerBlock,
 )
-from embedex.distributions.flows.dequantization import Dequantize
+from embedex.distributions.flows.autoregressive import (
+    ARBlock,
+    AutoregressiveModel,
+    CausalARNet,
+)
+from embedex.distributions.flows.dequantization import Dequantize, UniformDequantize
 from embedex.distributions.flows.discrete_flow_matching import (
     AttentionDenoiserNet,
     DiscreteDenoiserNet,
@@ -36,9 +41,8 @@ def create_model(config: ModelConfig, dequantize: bool, key: jax.Array) -> Distr
     embedding_key, flow_key = jax.random.split(key, 2)
 
     embedding_blocks = create_embedding_blocks(config, embedding_key)
-    generator = create_generative_network(
-        config, config.embedding.embedding_dim, dequantize, flow_key
-    )
+    conditioning_dim = config.embedding.embedding_dim
+    generator = create_generative_network(config, conditioning_dim, dequantize, flow_key)
 
     return FlowEmbedding(embedding_blocks, generator)
 
@@ -52,6 +56,7 @@ def create_embedding_blocks(
     key: jax.Array,
 ) -> list[PointwiseBlock | SetTransformerBlock]:
     emb = config.embedding
+
     num_rounds = emb.num_rounds
 
     blocks = []
@@ -96,6 +101,8 @@ def create_generative_network(
 
     if gen.flow_type == 'dfm':
         return create_dfm_model(config, conditioning_dim=conditioning_dim, key=key)
+    elif gen.flow_type == 'ar':
+        return create_ar_model(config, conditioning_dim=conditioning_dim, key=key)
     elif gen.flow_type == 'fm':
         if dequantize:
             raise NotImplementedError('Flow matching + dequant not implemented. Use DFM.')
@@ -197,6 +204,59 @@ def create_dfm_model(
     )
 
 
+def create_ar_model(
+    config: ModelConfig,
+    conditioning_dim: int,
+    key: jax.Array,
+) -> AutoregressiveModel:
+    gen = config.generator
+    num_variables = config.input_dim
+    num_classes = gen.ar_num_classes
+    token_dim = gen.ar_token_dim
+    keys = jax.random.split(key, gen.ar_num_layers + 6)
+
+    bos_embedding = jax.random.normal(keys[0], (token_dim,)) * 0.02
+    class_embeddings = jax.random.normal(keys[1], (num_classes, token_dim)) * 0.02
+    pos_embeddings = jax.random.normal(keys[2], (num_variables, token_dim)) * 0.02
+    cond_proj = eqx.nn.Linear(conditioning_dim, token_dim, key=keys[3])
+    final_norm = eqx.nn.LayerNorm(token_dim)
+    out_proj = eqx.nn.Linear(token_dim, num_classes, key=keys[4])
+
+    blocks = tuple(
+        ARBlock(
+            q_proj=eqx.nn.Linear(token_dim, token_dim, key=jax.random.split(keys[5 + i], 5)[0]),
+            k_proj=eqx.nn.Linear(token_dim, token_dim, key=jax.random.split(keys[5 + i], 5)[1]),
+            v_proj=eqx.nn.Linear(token_dim, token_dim, key=jax.random.split(keys[5 + i], 5)[2]),
+            o_proj=eqx.nn.Linear(token_dim, token_dim, key=jax.random.split(keys[5 + i], 5)[3]),
+            ln1=eqx.nn.LayerNorm(token_dim),
+            ln2=eqx.nn.LayerNorm(token_dim),
+            ff=eqx.nn.MLP(
+                in_size=token_dim,
+                out_size=token_dim,
+                width_size=token_dim * gen.ar_ff_multiplier,
+                depth=1,
+                key=jax.random.split(keys[5 + i], 5)[4],
+            ),
+            num_heads=gen.ar_num_heads,
+            token_dim=token_dim,
+        )
+        for i in range(gen.ar_num_layers)
+    )
+
+    net = CausalARNet(
+        bos_embedding=bos_embedding,
+        class_embeddings=class_embeddings,
+        pos_embeddings=pos_embeddings,
+        cond_proj=cond_proj,
+        blocks=blocks,
+        final_norm=final_norm,
+        out_proj=out_proj,
+        num_classes=num_classes,
+        num_variables=num_variables,
+    )
+    return AutoregressiveModel(net=net, num_classes=num_classes, num_variables=num_variables)
+
+
 def create_discrete_denoiser_net(
     num_classes: int,
     num_variables: int,
@@ -207,12 +267,12 @@ def create_discrete_denoiser_net(
     conditioning: str,
     key: jax.Array,
 ) -> DiscreteDenoiserNet:
-    simplex_dim = num_variables * num_classes
+    simplex = num_variables * num_classes
 
     net = create_conditioned_mlp(
-        input_dim=simplex_dim + time_embed_dim,
+        input_dim=simplex + time_embed_dim,
         conditioning_dim=conditioning_dim,
-        out_size=simplex_dim,
+        out_size=simplex,
         hidden_size=hidden_size,
         num_layers=num_layers,
         conditioning=conditioning,
@@ -310,16 +370,19 @@ def create_nf_model(
     layers: list[Flow] = []
 
     if dequantize:
-        dequant_cond_dim = conditioning_dim if gen.nf_condition_dequant else 0
-        layers.append(
-            create_dequantization_layer(
-                config.input_dim,
-                conditioning_dim=dequant_cond_dim,
-                hidden_size=gen.nf_dequant_hidden_size,
-                num_layers=gen.nf_dequant_num_layers,
-                key=dq_key,
+        if gen.nf_dequant_type == 'uniform':
+            layers.append(UniformDequantize())
+        else:
+            dequant_cond_dim = conditioning_dim if gen.nf_condition_dequant else 0
+            layers.append(
+                create_dequantization_layer(
+                    config.input_dim,
+                    conditioning_dim=dequant_cond_dim,
+                    hidden_size=gen.nf_dequant_hidden_size,
+                    num_layers=gen.nf_dequant_num_layers,
+                    key=dq_key,
+                )
             )
-        )
 
     for layer_key in keys:
         param_net = create_conditioned_mlp(

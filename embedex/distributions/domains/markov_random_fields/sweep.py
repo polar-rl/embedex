@@ -6,6 +6,7 @@ CELLS = [
     'st_nf_dequant',
     'st_dfm',
     'st_dfm_attn',
+    'st_ar',
 ]
 
 

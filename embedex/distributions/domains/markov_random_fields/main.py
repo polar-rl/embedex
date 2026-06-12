@@ -5,7 +5,6 @@ import jax
 from embedex.checkpointing import load_ckpt, save_ckpt
 from embedex.distributions.builder import build_from_config, create_model
 from embedex.distributions.domains.markov_random_fields.config import parse_args
-from embedex.distributions.domains.markov_random_fields.evaluate import evaluate
 from embedex.distributions.domains.markov_random_fields.mrf import random_mrfs, sample_batch
 from embedex.distributions.domains.markov_random_fields.plots import generate_paper_plots
 from embedex.distributions.training import train
@@ -65,10 +64,6 @@ def main() -> None:
 
     key, plots_key = jax.random.split(key, 2)
     generate_paper_plots(model, figure_save_dir, cfg.visualization, cfg.distribution, plots_key)
-
-    print('Running model evaluation...')
-    key, eval_key = jax.random.split(key, 2)
-    evaluate(model, cfg.evaluation, cfg.distribution, eval_key)
 
 
 if __name__ == '__main__':
