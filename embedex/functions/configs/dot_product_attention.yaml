@@ -1,0 +1,28 @@
+model:
+  embedding_size: 64
+  embedding:
+    stage_block: dot_product
+    num_stages: 2
+    hidden_size: 128
+    activation: gelu
+  evaluator:
+    decoder: attention
+    activation: gelu
+  operator:
+    kind: mlp
+    hidden_size: 256
+    num_hidden_layers: 4
+    activation: gelu
+
+training:
+  learning_rate: 3.0e-3
+  lr_schedule: cosine
+  loss_fn: rel_l2
+  num_iterations: 30000
+  operator_num_iterations: 30000
+  batch_size: 64
+  num_samples: 256
+  eval_every: 1000
+
+run_name: dot_product_attention
+seed: 0

@@ -1,0 +1,30 @@
+model:
+  embedding_size: 64
+  embedding:
+    stage_block: set_transformer_dot_product
+    num_stages: 2
+    hidden_size: 64
+    num_heads: 4
+    num_inducing: 16
+    activation: gelu
+  evaluator:
+    decoder: attention
+    activation: gelu
+  operator:
+    kind: mlp
+    hidden_size: 256
+    num_hidden_layers: 4
+    activation: gelu
+
+training:
+  learning_rate: 3.0e-3
+  lr_schedule: cosine
+  loss_fn: rel_l2
+  num_iterations: 30000
+  operator_num_iterations: 30000
+  batch_size: 64
+  num_samples: 256
+  eval_every: 1000
+
+run_name: set_transformer_attention
+seed: 0
