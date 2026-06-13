@@ -30,7 +30,7 @@ def model_log_pmf(
     num_evals: int,
     key: jax.Array,
 ) -> jax.Array:
-    log_probs, _, _ = model.log_prob(states, embedding, key, reps=num_evals)
+    log_probs, _, _ = model.log_prob(states, embedding, reps=num_evals, key=key)
     return log_probs - jax.nn.logsumexp(log_probs)
 
 

@@ -5,6 +5,8 @@ import jax
 import jax.numpy as jnp
 import optax
 
+from embedex.base_embedding_blocks import PointwiseBlock
+from embedex.base_embedding_blocks import SetTransformerBlock as BaseSetTransformerBlock
 from embedex.config import build_dataclass
 from embedex.functions.config import (
     Config,
@@ -13,7 +15,13 @@ from embedex.functions.config import (
     ModelConfig,
     OperatorConfig,
 )
-from embedex.functions.embedding import ConcatStageBlock, DotProductStageBlock, FunctionEmbedding
+from embedex.functions.embedding import (
+    DotProductBlock,
+    FunctionEmbedding,
+    PointwiseConcatBlock,
+    SetTransformerBlock,
+    SetTransformerDotProductBlock,
+)
 from embedex.functions.evaluator import AttentionDecoder, ConcatDecoder
 from embedex.functions.generator import Generator
 from embedex.functions.operator import MlpOperator, OperatorMapping, ResidualOperator
@@ -40,57 +48,65 @@ def build_from_config(cfg: dict, key: jax.Array) -> FunctionEmbedding:
 def create_embedding_blocks(
     model: ModelConfig, embedding: EmbeddingConfig, activation: Callable, key: jax.Array
 ) -> list[eqx.Module]:
-    stage_keys = jax.random.split(key, embedding.num_stages)
-    blocks: list[eqx.Module] = []
+    blocks, stage_keys = [], jax.random.split(key, embedding.num_stages)
+
+    def _embedding_mlp(in_size, key):
+        return eqx.nn.MLP(
+            in_size,
+            model.embedding_size,
+            embedding.hidden_size,
+            embedding.num_hidden_layers,
+            activation=activation,
+            key=key,
+        )
 
     for i, stage_key in enumerate(stage_keys):
         if embedding.stage_block == 'concat':
             in_size = model.input_size + model.output_size + (model.embedding_size if i > 0 else 0)
-            blocks.append(
-                ConcatStageBlock(
-                    eqx.nn.MLP(
-                        in_size,
-                        model.embedding_size,
-                        embedding.hidden_size,
-                        embedding.num_hidden_layers,
-                        activation=activation,
-                        key=stage_key,
-                    ),
-                )
-            )
+            blocks.append(PointwiseConcatBlock(PointwiseBlock(_embedding_mlp(in_size, stage_key))))
         elif embedding.stage_block == 'dot_product':
             x_key, y_key, pool_key = jax.random.split(stage_key, 3)
 
-            pool_net = None
-            if i > 0:
-                pool_net = eqx.nn.MLP(
-                    model.embedding_size,
-                    model.embedding_size,
-                    embedding.hidden_size,
-                    embedding.num_hidden_layers,
-                    activation=activation,
-                    key=pool_key,
+            blocks.append(
+                DotProductBlock(
+                    _embedding_mlp(model.input_size, x_key),
+                    _embedding_mlp(model.output_size, y_key),
+                    _embedding_mlp(model.embedding_size, pool_key) if i > 0 else None,
                 )
+            )
+        elif embedding.stage_block == 'set_transformer':
+            in_size = model.input_size + model.output_size + (model.embedding_size if i > 0 else 0)
 
             blocks.append(
-                DotProductStageBlock(
-                    eqx.nn.MLP(
-                        model.input_size,
+                SetTransformerBlock(
+                    BaseSetTransformerBlock(
+                        in_size,
                         model.embedding_size,
+                        embedding.num_heads,
+                        embedding.num_inducing,
                         embedding.hidden_size,
-                        embedding.num_hidden_layers,
-                        activation=activation,
-                        key=x_key,
+                        stage_key,
+                    )
+                )
+            )
+        elif embedding.stage_block == 'set_transformer_dot_product':
+            x_key, y_key, pool_key, stb_key = jax.random.split(stage_key, 4)
+
+            blocks.append(
+                SetTransformerDotProductBlock(
+                    DotProductBlock(
+                        _embedding_mlp(model.input_size, x_key),
+                        _embedding_mlp(model.output_size, y_key),
+                        _embedding_mlp(model.embedding_size, pool_key) if i > 0 else None,
                     ),
-                    eqx.nn.MLP(
-                        model.output_size,
+                    BaseSetTransformerBlock(
                         model.embedding_size,
+                        model.embedding_size,
+                        embedding.num_heads,
+                        embedding.num_inducing,
                         embedding.hidden_size,
-                        embedding.num_hidden_layers,
-                        activation=activation,
-                        key=y_key,
+                        stb_key,
                     ),
-                    pool_net,
                 )
             )
         else:
@@ -131,8 +147,9 @@ def create_evaluator(
 
 
 def create_operator_network(cfg: Config, generator: Generator, key: jax.Array) -> OperatorMapping:
-    in_size = generator.operator_input_size(cfg)
-    operator_network = create_operator(cfg.model.operator, in_size, cfg.model.embedding_size, key)
+    operator_network = create_operator(
+        cfg.model.operator, generator.operator_input_size(cfg), cfg.model.embedding_size, key
+    )
 
     return OperatorMapping(operator_network)
 
@@ -142,6 +159,16 @@ def create_operator(
 ) -> eqx.Module:
     activation = _get_activation(operator.activation)
 
+    if operator.kind == 'mlp':
+        return MlpOperator(
+            in_size,
+            out_size,
+            operator.hidden_size,
+            operator.num_hidden_layers,
+            activation,
+            key,
+        )
+
     if operator.kind == 'residual':
         return ResidualOperator(
             in_size,
@@ -149,15 +176,6 @@ def create_operator(
             operator.hidden_size,
             operator.num_blocks,
             operator.ff_multiplier,
-            activation,
-            key,
-        )
-    if operator.kind == 'mlp':
-        return MlpOperator(
-            in_size,
-            out_size,
-            operator.hidden_size,
-            operator.num_hidden_layers,
             activation,
             key,
         )

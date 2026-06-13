@@ -6,8 +6,6 @@
 
 *.egg-info
 __pycache__
-models
-figures
 
 *.txt
 *.log
@@ -18,3 +16,4 @@ figures
 models/
 figures/
 results/
+configs/

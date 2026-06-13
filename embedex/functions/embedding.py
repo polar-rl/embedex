@@ -4,21 +4,24 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 
+from embedex.base_embedding_blocks import PointwiseBlock
+from embedex.base_embedding_blocks import SetTransformerBlock as BaseSetTransformerBlock
 
-class ConcatStageBlock(eqx.Module):
-    net: eqx.nn.MLP
+
+class PointwiseConcatBlock(eqx.Module):
+    pointwise: PointwiseBlock
 
     def __call__(self, xs: jax.Array, ys: jax.Array, pool: jax.Array | None) -> jax.Array:
         if pool is None:
-            stage_in = jnp.concatenate([xs, ys], axis=-1)
+            stage_input = jnp.concatenate([xs, ys], axis=-1)
         else:
             pool_broadcast = jnp.broadcast_to(pool, (xs.shape[0], pool.shape[0]))
-            stage_in = jnp.concatenate([xs, ys, pool_broadcast], axis=-1)
+            stage_input = jnp.concatenate([xs, ys, pool_broadcast], axis=-1)
 
-        return jax.vmap(self.net)(stage_in)
+        return self.pointwise(stage_input, jnp.ones(stage_input.shape[0]))
 
 
-class DotProductStageBlock(eqx.Module):
+class DotProductBlock(eqx.Module):
     x_net: eqx.nn.MLP
     y_net: eqx.nn.MLP
     pool_net: eqx.nn.MLP | None
@@ -30,6 +33,29 @@ class DotProductStageBlock(eqx.Module):
             zs = zs * self.pool_net(pool)
 
         return zs
+
+
+class SetTransformerBlock(eqx.Module):
+    set_transformer: BaseSetTransformerBlock
+
+    def __call__(self, xs: jax.Array, ys: jax.Array, pool: jax.Array | None) -> jax.Array:
+        if pool is None:
+            stage_input = jnp.concatenate([xs, ys], axis=-1)
+        else:
+            pool_broadcast = jnp.broadcast_to(pool, (xs.shape[0], pool.shape[0]))
+            stage_input = jnp.concatenate([xs, ys, pool_broadcast], axis=-1)
+
+        return self.set_transformer(stage_input, jnp.ones(stage_input.shape[0]))
+
+
+class SetTransformerDotProductBlock(eqx.Module):
+    dot_product: DotProductBlock
+    set_transformer: BaseSetTransformerBlock
+
+    def __call__(self, xs: jax.Array, ys: jax.Array, pool: jax.Array | None) -> jax.Array:
+        stage_input = self.dot_product(xs, ys, pool)
+
+        return self.set_transformer(stage_input, jnp.ones(stage_input.shape[0]))
 
 
 class FunctionEmbedding(eqx.Module):

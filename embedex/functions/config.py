@@ -3,11 +3,15 @@ from dataclasses import dataclass, field
 
 @dataclass
 class EmbeddingConfig:
-    stage_block: str = 'dot_product'  # 'concat' or 'dot_product'
+    # 'concat', 'dot_product', 'set_transformer', or 'set_transformer_dot_product'
+    stage_block: str = 'dot_product'
     num_stages: int = 1
     hidden_size: int = 128
     num_hidden_layers: int = 2
     activation: str = 'relu'  # 'relu' or 'gelu'
+    # Set Transformer specific; hidden_size doubles as ff_dim
+    num_heads: int = 4
+    num_inducing: int = 16
 
 
 @dataclass
