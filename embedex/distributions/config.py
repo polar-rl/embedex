@@ -14,6 +14,17 @@ class EmbeddingConfig:
     # Set Transformer specific
     num_heads: int = 4
     num_inducing: int = 16
+    pool_type: Literal['mean', 'attention'] = 'mean'
+    pool_num_heads: int = 4
+    pool_num_queries: int = 1
+    # Node-relational stream (TWO_AXIS): outer-product sample pool -> node-axis edge-biased
+    # attention -> per-node N-dim Jhat row, delivered per node. The node-token width is N (not a
+    # tunable), so there is no d_model knob. num_classes is set from distribution.num_states.
+    relational: bool = False
+    rel_d_e: int = 16
+    rel_num_layers: int = 3
+    rel_num_heads: int = 4
+    num_classes: int = 2
 
 
 @dataclass

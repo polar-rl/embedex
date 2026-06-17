@@ -6,6 +6,71 @@ from embedex.base_embedding_blocks import PointwiseBlock, SetTransformerBlock  #
 from embedex.distributions.flows import flowee
 
 
+class AttentionPool(eqx.Module):
+    """PMA-style attention pooling: learned queries attend over the per-sample
+    features to produce the set readout (Set Transformer paper's pooling decoder).
+
+    Replaces the weighted-mean readout. A mean pool computes plain expectations
+    E_p[f(x)] under fixed (uniform) weights; this pool computes self-normalized
+    tilted expectations E_p[e^{s(x)} v(x)] / E_p[e^{s(x)}], so it can concentrate on
+    the samples carrying mode/disagreement structure rather than diluting them.
+
+    Sample weights enter as attention log-biases, identically to SetTransformerBlock
+    (key_log_w = log(w * n)); with uniform weights the bias is ~0.
+
+    Maps (N, D) -> (num_queries * D,)  [num_queries=1 keeps the embedding D-dim].
+    """
+
+    query: jax.Array  # (num_queries, D)
+    q_proj: eqx.nn.Linear
+    k_proj: eqx.nn.Linear
+    v_proj: eqx.nn.Linear
+    o_proj: eqx.nn.Linear
+    num_heads: int
+
+    def __init__(
+        self,
+        dim: int,
+        num_heads: int,
+        num_queries: int,
+        key: jax.Array,
+    ) -> None:
+        keys = jax.random.split(key, 5)
+        self.query = jax.random.normal(keys[0], (num_queries, dim)) * 0.02
+        self.q_proj = eqx.nn.Linear(dim, dim, key=keys[1])
+        self.k_proj = eqx.nn.Linear(dim, dim, key=keys[2])
+        self.v_proj = eqx.nn.Linear(dim, dim, key=keys[3])
+        self.o_proj = eqx.nn.Linear(dim, dim, key=keys[4])
+        self.num_heads = num_heads
+
+    def __call__(self, zs: jax.Array, weights: jax.Array) -> jax.Array:
+        d = zs.shape[-1]
+        head_dim = d // self.num_heads
+
+        w = weights / (jnp.sum(weights) + 1e-30)
+        n = w.shape[0]
+        key_log_w = jnp.log(jnp.clip(w * n, min=1e-30))
+
+        Q = jax.vmap(self.q_proj)(self.query).reshape(-1, self.num_heads, head_dim)
+        K = jax.vmap(self.k_proj)(zs).reshape(-1, self.num_heads, head_dim)
+        V = jax.vmap(self.v_proj)(zs).reshape(-1, self.num_heads, head_dim)
+
+        Q, K, V = (
+            jnp.transpose(Q, (1, 0, 2)),
+            jnp.transpose(K, (1, 0, 2)),
+            jnp.transpose(V, (1, 0, 2)),
+        )
+        scale = jnp.sqrt(head_dim).astype(Q.dtype)
+        logits = jnp.matmul(Q, jnp.transpose(K, (0, 2, 1))) / scale
+        logits = logits + key_log_w[None, None, :].astype(logits.dtype)
+        attn = jax.nn.softmax(logits, axis=-1)
+        out = jnp.matmul(attn, V)
+
+        out = jnp.transpose(out, (1, 0, 2)).reshape(-1, d)
+        out = jax.vmap(self.o_proj)(out)
+        return out.reshape(-1)
+
+
 class DistributionEmbedding(eqx.Module):
     """Embeds samples to create a latent representation of their distribution.
 
@@ -22,6 +87,8 @@ class DistributionEmbedding(eqx.Module):
 
     embedding_blocks: list[eqx.Module]
     generator: flowee.Flow
+    pools: list[eqx.Module] | None = None
+    relational: eqx.Module | None = None
 
     def generate(
         self,
@@ -39,7 +106,7 @@ class DistributionEmbedding(eqx.Module):
         w = weights.reshape((-1, 1)) / jnp.sum(weights)
 
         pool = None
-        for block in self.embedding_blocks:
+        for i, block in enumerate(self.embedding_blocks):
             if pool is None:
                 block_input = xs
             else:
@@ -47,7 +114,10 @@ class DistributionEmbedding(eqx.Module):
                 block_input = jnp.concatenate([xs, pool_broadcast], axis=-1)
 
             zs = block(block_input, weights)
-            pool = jnp.sum(zs * w, axis=0)
+            pool = jnp.sum(zs * w, axis=0) if self.pools is None else self.pools[i](zs, weights)
+
+        if self.relational is not None:
+            pool = jnp.concatenate([pool, self.relational(xs)])
 
         return pool, jnp.linalg.norm(pool)
 

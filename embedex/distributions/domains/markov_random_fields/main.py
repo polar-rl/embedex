@@ -23,6 +23,7 @@ def main() -> None:
 
     cfg.model.input_dim = cfg.distribution.num_spins
     cfg.model.output_dim = cfg.distribution.num_spins
+    cfg.model.embedding.num_classes = cfg.distribution.num_states
     if cfg.model.generator.flow_type == 'dfm':
         cfg.model.generator.dfm_num_classes = cfg.distribution.num_states
 

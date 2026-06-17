@@ -11,6 +11,7 @@ from embedex.distributions.conditioning import (
 )
 from embedex.distributions.config import ModelConfig
 from embedex.distributions.embedding import (
+    AttentionPool,
     DistributionEmbedding,
     FlowEmbedding,
     PointwiseBlock,
@@ -35,16 +36,56 @@ from embedex.distributions.flows.normalizing_flow import (
     ParameterizedNLSq,
     create_mask,
 )
+from embedex.distributions.relational import RelationalStream
 
 
 def create_model(config: ModelConfig, dequantize: bool, key: jax.Array) -> DistributionEmbedding:
-    embedding_key, flow_key = jax.random.split(key, 2)
-
+    embedding_key, pool_key, rel_key, flow_key = jax.random.split(key, 4)
+    emb = config.embedding
     embedding_blocks = create_embedding_blocks(config, embedding_key)
-    conditioning_dim = config.embedding.embedding_dim
+    pools = create_pools(config, pool_key)
+    relational = create_relational(config, rel_key)
+    num_queries = emb.pool_num_queries if emb.pool_type == 'attention' else 1
+    conditioning_dim = emb.embedding_dim * num_queries
+    if relational is not None:
+        conditioning_dim += relational.out_dim
     generator = create_generative_network(config, conditioning_dim, dequantize, flow_key)
 
-    return FlowEmbedding(embedding_blocks, generator)
+    return FlowEmbedding(embedding_blocks, generator, pools, relational)
+
+
+def create_relational(config: ModelConfig, key: jax.Array) -> RelationalStream | None:
+    """Node-relational stream (TWO_AXIS); None unless embedding.relational is set."""
+    emb = config.embedding
+    if not emb.relational:
+        return None
+    return RelationalStream(
+        num_variables=config.input_dim,
+        num_classes=emb.num_classes,
+        d_e=emb.rel_d_e,
+        num_layers=emb.rel_num_layers,
+        num_heads=emb.rel_num_heads,
+        key=key,
+    )
+
+
+def create_pools(config: ModelConfig, key: jax.Array) -> list[AttentionPool] | None:
+    """One PMA readout per round when pool_type='attention'; None = weighted mean."""
+    emb = config.embedding
+    if emb.pool_type != 'attention':
+        return None
+    if emb.pool_num_queries != 1:
+        raise NotImplementedError('pool_num_queries > 1 (rung 3) not yet wired through embed()')
+    keys = jax.random.split(key, emb.num_rounds)
+    return [
+        AttentionPool(
+            dim=emb.embedding_dim,
+            num_heads=emb.pool_num_heads,
+            num_queries=emb.pool_num_queries,
+            key=keys[i],
+        )
+        for i in range(emb.num_rounds)
+    ]
 
 
 def build_from_config(cfg: dict, dequantize: bool, key: jax.Array) -> DistributionEmbedding:
@@ -182,6 +223,7 @@ def create_dfm_model(
             time_embed_dim=gen.dfm_time_embed_dim,
             ff_multiplier=gen.dfm_attn_ff_multiplier,
             num_cond_tokens=gen.dfm_attn_num_cond_tokens,
+            rel_node_dim=num_variables if config.embedding.relational else 0,
             key=key,
         )
     else:
@@ -215,10 +257,14 @@ def create_ar_model(
     token_dim = gen.ar_token_dim
     keys = jax.random.split(key, gen.ar_num_layers + 6)
 
+    rel_node_dim = num_variables if config.embedding.relational else 0
+    moment_dim = conditioning_dim - rel_node_dim * rel_node_dim
+    cond_in = (moment_dim + rel_node_dim) if rel_node_dim else conditioning_dim
+
     bos_embedding = jax.random.normal(keys[0], (token_dim,)) * 0.02
     class_embeddings = jax.random.normal(keys[1], (num_classes, token_dim)) * 0.02
     pos_embeddings = jax.random.normal(keys[2], (num_variables, token_dim)) * 0.02
-    cond_proj = eqx.nn.Linear(conditioning_dim, token_dim, key=keys[3])
+    cond_proj = eqx.nn.Linear(cond_in, token_dim, key=keys[3])
     final_norm = eqx.nn.LayerNorm(token_dim)
     out_proj = eqx.nn.Linear(token_dim, num_classes, key=keys[4])
 
@@ -253,6 +299,8 @@ def create_ar_model(
         out_proj=out_proj,
         num_classes=num_classes,
         num_variables=num_variables,
+        rel_node_dim=rel_node_dim,
+        moment_dim=moment_dim,
     )
     return AutoregressiveModel(net=net, num_classes=num_classes, num_variables=num_variables)
 
@@ -298,18 +346,27 @@ def create_attention_denoiser_net(
     ff_multiplier: int,
     num_cond_tokens: int,
     key: jax.Array,
+    rel_node_dim: int = 0,
 ) -> AttentionDenoiserNet:
     keys = jax.random.split(key, num_layers + 8)
 
-    PARAMS_PER_ENTITY = 7
-    if num_cond_tokens <= 0:
-        if conditioning_dim >= PARAMS_PER_ENTITY:
-            num_cond_tokens = conditioning_dim // PARAMS_PER_ENTITY
-        else:
-            num_cond_tokens = max(1, conditioning_dim)
-    cond_token_raw_dim = (
-        conditioning_dim // num_cond_tokens if num_cond_tokens > 0 else conditioning_dim
-    )
+    if rel_node_dim > 0:
+        moment_dim = conditioning_dim - rel_node_dim * rel_node_dim
+        num_cond_tokens = rel_node_dim
+        cond_token_raw_dim = moment_dim + rel_node_dim
+        cond_global_in = moment_dim
+    else:
+        moment_dim = 0
+        PARAMS_PER_ENTITY = 7
+        if num_cond_tokens <= 0:
+            if conditioning_dim >= PARAMS_PER_ENTITY:
+                num_cond_tokens = conditioning_dim // PARAMS_PER_ENTITY
+            else:
+                num_cond_tokens = max(1, conditioning_dim)
+        cond_token_raw_dim = (
+            conditioning_dim // num_cond_tokens if num_cond_tokens > 0 else conditioning_dim
+        )
+        cond_global_in = conditioning_dim
 
     class_embeddings = jax.random.normal(keys[0], (num_classes, token_dim)) * 0.02
     variable_embeddings = jax.random.normal(keys[1], (num_variables, token_dim)) * 0.02
@@ -317,7 +374,7 @@ def create_attention_denoiser_net(
 
     cond_token_proj = eqx.nn.Linear(cond_token_raw_dim, token_dim, key=keys[3])
     cond_time_proj = eqx.nn.Linear(time_embed_dim, token_dim, key=keys[4])
-    cond_global_proj = eqx.nn.Linear(conditioning_dim, token_dim, key=keys[5 + num_layers])
+    cond_global_proj = eqx.nn.Linear(cond_global_in, token_dim, key=keys[5 + num_layers])
     cond_pos_embeddings = (
         jax.random.normal(keys[6 + num_layers], (num_cond_tokens, token_dim)) * 0.02
     )
@@ -343,6 +400,8 @@ def create_attention_denoiser_net(
         token_dim=token_dim,
         num_cond_tokens=num_cond_tokens,
         cond_token_raw_dim=cond_token_raw_dim,
+        rel_node_dim=rel_node_dim,
+        moment_dim=moment_dim,
         class_embeddings=class_embeddings,
         variable_embeddings=variable_embeddings,
         time_proj=time_proj,

@@ -83,6 +83,8 @@ class AttentionDenoiserNet(eqx.Module):
     token_dim: int = eqx.field(static=True)
     num_cond_tokens: int = eqx.field(static=True)
     cond_token_raw_dim: int = eqx.field(static=True)
+    rel_node_dim: int = eqx.field(static=True)
+    moment_dim: int = eqx.field(static=True)
 
     class_embeddings: jax.Array
     variable_embeddings: jax.Array
@@ -121,12 +123,24 @@ class AttentionDenoiserNet(eqx.Module):
 
         if sideinfo is not None:
             sideinfo_flat = jnp.ravel(sideinfo)
-            cond_global = self.cond_global_proj(sideinfo_flat)
-            tokens = tokens + cond_global[None, :]
-            cond_raw = sideinfo_flat.reshape(self.num_cond_tokens, self.cond_token_raw_dim)
-            cond_tokens = batch_linear(cond_raw, self.cond_token_proj)
             cond_t = self.cond_time_proj(t_embed)
-            cond_tokens = cond_tokens + cond_t[None, :] + self.cond_pos_embeddings
+            if self.rel_node_dim > 0:
+                n = self.rel_node_dim
+                mu = sideinfo_flat[: self.moment_dim]
+                jrows = sideinfo_flat[self.moment_dim :].reshape(n, n)
+                tokens = tokens + self.cond_global_proj(mu)[None, :]
+                pernode = jnp.concatenate(
+                    [jnp.broadcast_to(mu, (n, self.moment_dim)), jrows], axis=-1
+                )
+                node_signal = batch_linear(pernode, self.cond_token_proj)
+                tokens = tokens + node_signal
+                cond_tokens = node_signal + cond_t[None, :] + self.cond_pos_embeddings
+            else:
+                cond_global = self.cond_global_proj(sideinfo_flat)
+                tokens = tokens + cond_global[None, :]
+                cond_raw = sideinfo_flat.reshape(self.num_cond_tokens, self.cond_token_raw_dim)
+                cond_tokens = batch_linear(cond_raw, self.cond_token_proj)
+                cond_tokens = cond_tokens + cond_t[None, :] + self.cond_pos_embeddings
         else:
             cond_tokens = jnp.zeros((1, self.token_dim))
 

@@ -1,12 +1,3 @@
-"""Autoregressive categorical generator conditioned on an embedding.
-
-Models p(x | z) = prod_i p(x_i | x_<i, z) exactly via a causal transformer:
-teacher-forced cross-entropy training, exact log-prob, exact ancestral sampling.
-Serves as the ceiling for "neural renderer given z" — if it closes more of the
-conditional gap than masked DFM, the DFM mechanism limited rendering; if it caps
-at the same place, amortized inference over the family is the wall.
-"""
-
 import equinox as eqx
 import jax
 import jax.numpy as jnp
@@ -49,15 +40,17 @@ class ARBlock(eqx.Module):
 class CausalARNet(eqx.Module):
     """Causal transformer giving p(x_i | x_<i, z) logits for every i in one pass."""
 
-    bos_embedding: jax.Array  # (token_dim,)
-    class_embeddings: jax.Array  # (num_classes, token_dim)
-    pos_embeddings: jax.Array  # (num_variables, token_dim)
-    cond_proj: eqx.nn.Linear  # conditioning_dim -> token_dim
+    bos_embedding: jax.Array
+    class_embeddings: jax.Array
+    pos_embeddings: jax.Array
+    cond_proj: eqx.nn.Linear
     blocks: tuple
     final_norm: eqx.nn.LayerNorm
-    out_proj: eqx.nn.Linear  # token_dim -> num_classes
+    out_proj: eqx.nn.Linear
     num_classes: int = eqx.field(static=True)
     num_variables: int = eqx.field(static=True)
+    rel_node_dim: int = eqx.field(static=True, default=0)
+    moment_dim: int = eqx.field(static=True, default=0)
 
     def __call__(self, x_int: jax.Array, sideinfo: jax.Array | None) -> jax.Array:
         """x_int: (num_variables,) int. Returns logits (num_variables, num_classes).
@@ -69,7 +62,17 @@ class CausalARNet(eqx.Module):
         tok_in = jnp.concatenate([self.bos_embedding[None, :], prev], axis=0)  # (N, D)
         h = tok_in + self.pos_embeddings
         if sideinfo is not None:
-            h = h + self.cond_proj(sideinfo)[None, :]
+            if self.rel_node_dim > 0:
+                # z = [mu ; Jhat(N*N)]; deliver [mu ; row_i] to node i's slot (node-aligned)
+                n = self.rel_node_dim
+                mu = sideinfo[: self.moment_dim]
+                jrows = sideinfo[self.moment_dim :].reshape(n, n)
+                pernode = jnp.concatenate(
+                    [jnp.broadcast_to(mu, (n, self.moment_dim)), jrows], axis=-1
+                )
+                h = h + jax.vmap(self.cond_proj)(pernode)
+            else:
+                h = h + self.cond_proj(sideinfo)[None, :]
         for block in self.blocks:
             h = block(h)
         return jax.vmap(self.out_proj)(jax.vmap(self.final_norm)(h))
