@@ -16,6 +16,12 @@ class RandomTreesDataConfig(DataConfig):
 
 
 @dataclass
+class ScaleFreeDataConfig(DataConfig):
+    num_vertices: int = 10
+    m: int = 2
+
+
+@dataclass
 class ArmsConfig(Config):
     data: ArmsDataConfig = field(default_factory=ArmsDataConfig)
     model_dir: str = 'models/graphs/arms'
@@ -27,6 +33,13 @@ class RandomTreesConfig(Config):
     data: RandomTreesDataConfig = field(default_factory=RandomTreesDataConfig)
     model_dir: str = 'models/graphs/random_trees'
     figure_dir: str = 'figures/graphs/random_trees'
+
+
+@dataclass
+class ScaleFreeConfig(Config):
+    data: ScaleFreeDataConfig = field(default_factory=ScaleFreeDataConfig)
+    model_dir: str = 'models/graphs/scale_free'
+    figure_dir: str = 'figures/graphs/scale_free'
 
 
 def load_config[T](cfg_cls: type[T], path: str) -> T:
