@@ -1,3 +1,5 @@
+import os
+
 import equinox as eqx
 import jax
 import jax.numpy as jnp
@@ -17,6 +19,7 @@ from embedex.graphs.reconstructor import (
     recon_medians,
     recon_vertex_degrees,
 )
+from embedex.graphs.visualize import plot_geometry, plot_reconstructions
 from embedex.logger import safe_log
 
 
@@ -26,12 +29,24 @@ def evaluate_embeddings(
     generator: Generator,
     key: jax.Array,
 ) -> None:
+    key, sample_key, plot_key = jax.random.split(key, 3)
+
     num_graphs = cfg.evaluation.num_eval_graphs
     num_samples = cfg.evaluation.num_eval_samples
 
-    edges, adjs = generator.sample(num_graphs, num_samples, key)
+    edges, adjs = generator.sample(num_graphs, num_samples, sample_key)
     geometry, base_rate = score_geometry(embedding_network, edges, adjs)
     report_geometry(cfg, geometry, base_rate)
+
+    plot_geometry(
+        embedding_network,
+        generator,
+        cfg.evaluation.num_plot_graphs,
+        cfg.model.input_size,
+        num_samples,
+        os.path.join(cfg.figure_dir, cfg.run_name),
+        plot_key,
+    )
 
 
 def evaluate_reconstruction(
@@ -41,12 +56,25 @@ def evaluate_reconstruction(
     generator: Generator,
     key: jax.Array,
 ) -> None:
+    key, sample_key, plot_key = jax.random.split(key, 3)
+
     num_graphs = cfg.evaluation.num_eval_graphs
     num_samples = cfg.evaluation.num_eval_samples
 
-    edges, adjs = generator.sample(num_graphs, num_samples, key)
+    edges, adjs = generator.sample(num_graphs, num_samples, sample_key)
     results, base_rate = score_reconstructions(embedding_network, medians_network, edges, adjs)
     report_reconstructions(cfg, results, base_rate, num_graphs)
+
+    plot_reconstructions(
+        embedding_network,
+        medians_network,
+        generator,
+        cfg.evaluation.num_plot_graphs,
+        cfg.model.input_size,
+        num_samples,
+        os.path.join(cfg.figure_dir, cfg.run_name),
+        plot_key,
+    )
 
 
 @eqx.filter_jit
