@@ -51,14 +51,14 @@ def main(cfg: ArmsConfig) -> None:
     log_cfg(cfg.run, cfg)
 
     generator = ArmsGenerator(cfg.data.num_vertices)
-    embedding_network, _ = run_training_pipeline(
+    embedding_network, medians_network = run_training_pipeline(
         cfg,
         generator,
         evaluate_embeddings,
         evaluate_reconstruction,
     )
 
-    save_ckpt(embedding_network, cfg, step=cfg.training.num_iterations)
+    save_ckpt((embedding_network, medians_network), cfg, cfg.training.num_iterations)
     cfg.run.stop()
 
 
