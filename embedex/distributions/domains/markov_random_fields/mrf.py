@@ -35,11 +35,9 @@ class MRF(eqx.Module):
 
     def log_pmf(self) -> jax.Array:
         onehot = self._onehot()
-        field = jnp.einsum('mic,ic->m', onehot, self.h)
-        # Reassociate so the (m, j, b) intermediate stays small (avoids the giant
-        # 'mia,mjb->mijab' tensor that OOMs at large num_spins).
-        partial = jnp.einsum('mia,ijab->mjb', onehot, self.J)
-        coupling = 0.5 * jnp.einsum('mjb,mjb->m', partial, onehot)
+        field = jnp.einsum('mic,ic->m', onehot, self.h, precision='highest')
+        partial = jnp.einsum('mia,ijab->mjb', onehot, self.J, precision='highest')
+        coupling = 0.5 * jnp.einsum('mjb,mjb->m', partial, onehot, precision='highest')
         energies = field + coupling
         return energies - jax.nn.logsumexp(energies)
 
@@ -47,24 +45,21 @@ class MRF(eqx.Module):
         return jnp.exp(self.log_pmf())
 
     def sample(self, num_samples: int, key: jax.Array) -> jax.Array:
-        # Inverse-CDF sampling: cumsum once + searchsorted is O(num_samples + 2^N)
-        # memory, vs categorical's O(num_samples * 2^N) gumbel tensor which OOMs
-        # (under vmap) at large num_spins.
         cdf = jnp.cumsum(jnp.exp(self.log_pmf()))
         u = jax.random.uniform(key, (num_samples,)) * cdf[-1]
         indices = jnp.clip(jnp.searchsorted(cdf, u, side='right'), 0, cdf.shape[0] - 1)
         return self.states[indices].astype(jnp.float32)
 
     def single_marginals(self) -> jax.Array:
-        return jnp.einsum('m,mic->ic', self.pmf(), self._onehot())
+        return jnp.einsum('m,mic->ic', self.pmf(), self._onehot(), precision='highest')
 
     def pairwise_marginals(self) -> jax.Array:
         onehot = self._onehot()
-        return jnp.einsum('m,mia,mjb->ijab', self.pmf(), onehot, onehot)
+        return jnp.einsum('m,mia,mjb->ijab', self.pmf(), onehot, onehot, precision='highest')
 
     def agreement_marginals(self) -> jax.Array:
         onehot = self._onehot()
-        return jnp.einsum('m,mic,mjc->ij', self.pmf(), onehot, onehot)
+        return jnp.einsum('m,mic,mjc->ij', self.pmf(), onehot, onehot, precision='highest')
 
     @classmethod
     def random(

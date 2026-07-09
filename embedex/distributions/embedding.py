@@ -117,7 +117,7 @@ class DistributionEmbedding(eqx.Module):
             pool = jnp.sum(zs * w, axis=0) if self.pools is None else self.pools[i](zs, weights)
 
         if self.relational is not None:
-            pool = jnp.concatenate([pool, self.relational(xs)])
+            pool = jnp.concatenate([pool, self.relational(xs, weights)])
 
         return pool, jnp.linalg.norm(pool)
 

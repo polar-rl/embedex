@@ -72,13 +72,19 @@ class RelationalStream(eqx.Module):
     def out_dim(self) -> int:
         return self.num_variables * self.num_variables
 
-    def __call__(self, xs: jax.Array) -> jax.Array:
-        x_int = jnp.clip(jnp.round(xs).astype(jnp.int32), 0, self.num_classes - 1)
+    def __call__(self, xs: jax.Array, weights: jax.Array | None = None) -> jax.Array:
+        x_int = jnp.clip(
+            jnp.round(xs.astype(jnp.float32)).astype(jnp.int32), 0, self.num_classes - 1
+        )
         e = self.cell_embed[x_int]
         N = self.num_variables
-        R = jnp.einsum('sid,sje->ijde', e, e) / xs.shape[0]
+        if weights is None:
+            w = jnp.full(xs.shape[0], 1.0 / xs.shape[0])
+        else:
+            w = weights / (jnp.sum(weights) + 1e-30)
+        R = jnp.einsum('s,sid,sje->ijde', w, e, e)
         Rp = jax.vmap(jax.vmap(self.Rproj))(R.reshape(N, N, -1))
-        h = jax.vmap(self.node_init)(jnp.mean(e, axis=0))
+        h = jax.vmap(self.node_init)(jnp.sum(e * w[:, None, None], axis=0))
         for blk in self.blocks:
             h = blk(h, Rp)
         return h.reshape(-1)
