@@ -183,7 +183,7 @@ class DiscreteFlowMatchingModel(flowee.Flow):
     num_steps: int = eqx.field(static=True)
 
     def _to_int(self, x: jax.Array) -> jax.Array:
-        return jnp.clip(jnp.round(x).astype(jnp.int32), 0, self.num_classes - 1)
+        return jnp.clip(jnp.round(x.astype(jnp.float32)).astype(jnp.int32), 0, self.num_classes - 1)
 
     def _corrupt(self, x_int: jax.Array, t: jax.Array, key: jax.Array) -> jax.Array:
         """Sample `x_t` from the forward process `q(x_t | x_1)`.

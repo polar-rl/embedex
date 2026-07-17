@@ -103,7 +103,7 @@ class DistributionEmbedding(eqx.Module):
 
     def embed(self, xs: jax.Array, weights: jax.Array) -> tuple[jax.Array, jax.Array]:
         n = xs.shape[0]
-        w = weights.reshape((-1, 1)) / jnp.sum(weights)
+        w = weights.reshape((-1, 1)) / (jnp.sum(weights) + 1e-30)
 
         pool = None
         for i, block in enumerate(self.embedding_blocks):
