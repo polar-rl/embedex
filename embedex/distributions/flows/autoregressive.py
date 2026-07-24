@@ -91,8 +91,13 @@ class CausalARNet(eqx.Module):
         prev = self.class_embeddings[x_int[:-1]]  # (N-1, D)
         tok_in = jnp.concatenate([self.bos_embedding[None, :], prev], axis=0)  # (N, D)
         h = tok_in + self._static_inputs(sideinfo)
-        for block in self.blocks:
+        h = h.astype(jnp.bfloat16)
+        blocks = jax.tree.map(
+            lambda a: a.astype(jnp.bfloat16) if eqx.is_inexact_array(a) else a, self.blocks
+        )
+        for block in blocks:
             h = block(h)
+        h = h.astype(jnp.float32)
         return jax.vmap(self.out_proj)(jax.vmap(self.final_norm)(h))
 
 
@@ -132,19 +137,23 @@ class AutoregressiveModel(flowee.Flow):
         static_in = net._static_inputs(sideinfo)
         num_heads = net.blocks[0].num_heads
         dh = net.blocks[0].token_dim // num_heads
-        cache0 = jnp.zeros((len(net.blocks), self.num_variables, num_heads, dh))
+        # bf16 to match __call__'s block-stack numerics (cache equivalence test).
+        blocks = jax.tree.map(
+            lambda a: a.astype(jnp.bfloat16) if eqx.is_inexact_array(a) else a, net.blocks
+        )
+        cache0 = jnp.zeros((len(net.blocks), self.num_variables, num_heads, dh), dtype=jnp.bfloat16)
 
         def body(i, carry):
             x, kc, vc = carry
             prev_tok = jnp.where(
                 i == 0, net.bos_embedding, net.class_embeddings[x[jnp.maximum(i - 1, 0)]]
             )
-            h_i = prev_tok + static_in[i]
-            for layer, block in enumerate(net.blocks):
+            h_i = (prev_tok + static_in[i]).astype(jnp.bfloat16)
+            for layer, block in enumerate(blocks):
                 h_i, k_l, v_l = block.step(h_i, kc[layer], vc[layer], i)
                 kc = kc.at[layer].set(k_l)
                 vc = vc.at[layer].set(v_l)
-            logits_i = net.out_proj(net.final_norm(h_i))
+            logits_i = net.out_proj(net.final_norm(h_i.astype(jnp.float32)))
             xi = jax.random.categorical(keys[i], logits_i)
             return x.at[i].set(xi.astype(x.dtype)), kc, vc
 
