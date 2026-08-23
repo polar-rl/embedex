@@ -34,4 +34,12 @@ def read_ckpt_config(ckpt_path: str) -> dict:
 
 def select_last_ckpt(directory: str) -> str:
     files = [f for f in os.listdir(directory) if f.endswith('.eqx')]
-    return os.path.join(directory, sorted(files)[-1])
+
+    # Numeric sort: checkpoint names are zero-padded to the run's iteration
+    # width, so resumed runs mix widths ('60000.eqx' vs '120000.eqx') and a
+    # string sort would pick the shorter-width earlier checkpoint as "last".
+    def _key(f):
+        stem = f.rsplit('.', 1)[0]
+        return (0, int(stem), '') if stem.isdigit() else (1, 0, f)
+
+    return os.path.join(directory, sorted(files, key=_key)[-1])
