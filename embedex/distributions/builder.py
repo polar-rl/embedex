@@ -36,7 +36,11 @@ from embedex.distributions.flows.normalizing_flow import (
     ParameterizedNLSq,
     create_mask,
 )
-from embedex.distributions.relational import RelationalStream
+from embedex.distributions.relational import (
+    RawAgreeStream,
+    RawEdgeStream,
+    RelationalStream,
+)
 
 
 def create_model(config: ModelConfig, dequantize: bool, key: jax.Array) -> DistributionEmbedding:
@@ -54,11 +58,24 @@ def create_model(config: ModelConfig, dequantize: bool, key: jax.Array) -> Distr
     return FlowEmbedding(embedding_blocks, generator, pools, relational)
 
 
-def create_relational(config: ModelConfig, key: jax.Array) -> RelationalStream | None:
-    """Node-relational stream (TWO_AXIS); None unless embedding.relational is set."""
+def create_relational(config: ModelConfig, key: jax.Array) -> eqx.Module | None:
+    """Node-relational stream (TWO_AXIS); None unless embedding.rel_mode selects one.
+
+    Every arm emits out_dim = N^2, so conditioning width does not move between them.
+    """
     emb = config.embedding
-    if not emb.relational:
+    mode = emb.rel_mode
+    if mode == 'none':
         return None
+    if mode == 'raw_agree':
+        return RawAgreeStream(num_variables=config.input_dim, num_classes=emb.num_classes)
+    if mode == 'raw_edge':
+        return RawEdgeStream(
+            num_variables=config.input_dim,
+            num_classes=emb.num_classes,
+            d_e=emb.rel_d_e,
+            key=key,
+        )
     return RelationalStream(
         num_variables=config.input_dim,
         num_classes=emb.num_classes,
@@ -223,7 +240,7 @@ def create_dfm_model(
             time_embed_dim=gen.dfm_time_embed_dim,
             ff_multiplier=gen.dfm_attn_ff_multiplier,
             num_cond_tokens=gen.dfm_attn_num_cond_tokens,
-            rel_node_dim=num_variables if config.embedding.relational else 0,
+            rel_node_dim=num_variables if config.embedding.rel_mode != 'none' else 0,
             key=key,
         )
     else:
@@ -257,7 +274,7 @@ def create_ar_model(
     token_dim = gen.ar_token_dim
     keys = jax.random.split(key, gen.ar_num_layers + 6)
 
-    rel_node_dim = num_variables if config.embedding.relational else 0
+    rel_node_dim = num_variables if config.embedding.rel_mode != 'none' else 0
     moment_dim = conditioning_dim - rel_node_dim * rel_node_dim
     cond_in = (moment_dim + rel_node_dim) if rel_node_dim else conditioning_dim
 

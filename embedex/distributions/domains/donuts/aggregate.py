@@ -133,13 +133,15 @@ def latex_metric_table(groups: dict, metric: str, n_evals: list[int]) -> str:
         r'\begin{table}[t]',
         r'  \centering',
         r'  \footnotesize',
+        r'  \resizebox{\linewidth}{!}{%',
         rf'  \begin{{tabular}}{{{colspec}}}',
         r'    \toprule',
         '    ' + head,
         r'    \midrule',
         *(f'    {line}' for line in body),
         r'    \bottomrule',
-        r'  \end{tabular}',
+        r'  \end{tabular}%',
+        r'  }',
         rf'  \caption{{Donut {label} (mean $\pm$ SE over seeds, lower is better) '
         rf'versus embedding sample count $n$.}}',
         rf'  \label{{tab:donut-{metric}}}',
@@ -224,17 +226,20 @@ def summary_latex(groups: dict, probe_rows: list[dict], n_eval: int) -> str:
         r'\begin{table}[t]',
         r'  \centering',
         r'  \footnotesize',
+        r'  \resizebox{\linewidth}{!}{%',
         rf'  \begin{{tabular}}{{{colspec}}}',
         r'    \toprule',
         '    ' + head,
         r'    \midrule',
         *(f'    {line}' for line in body),
         r'    \bottomrule',
-        r'  \end{tabular}',
+        r'  \end{tabular}%',
+        r'  }',
         rf'  \caption{{Reconstruction and structural metrics at $n_{{\text{{eval}}}}={n_eval}$ '
-        r'(mean $\pm$ SE over seeds). NLL and SWD (lower is better) are within noise across '
-        r'the four cells, while width variance explained (VE, higher is better) cleanly '
-        r'separates them: the Set Transformer recovers width that the pointwise block cannot. '
+        r'(mean $\pm$ SE over seeds). The Set Transformer leads on NLL and SWD (lower is '
+        r'better) by a small margin, while width variance explained (VE, higher is better) '
+        r'separates the two embedding architectures sharply: the Set Transformer recovers '
+        r'width that the pointwise block cannot. '
         r'Baselines have no embedding to probe ($--$).}',
         r'  \label{tab:donut-summary}',
         r'\end{table}',

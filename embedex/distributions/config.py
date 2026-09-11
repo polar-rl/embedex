@@ -20,11 +20,38 @@ class EmbeddingConfig:
     # Node-relational stream (TWO_AXIS): outer-product sample pool -> node-axis edge-biased
     # attention -> per-node N-dim Jhat row, delivered per node. The node-token width is N (not a
     # tunable), so there is no d_model knob. num_classes is set from distribution.num_states.
+    #
+    # relational_mode selects which stream is built. 'learned' is the full stream above;
+    # 'raw_agree' and 'raw_edge' are the ablation arms that ask whether the edge-biased
+    # attention earns its keep over the raw pairwise statistic. All three emit out_dim = N^2
+    # and are delivered per variable, so conditioning width is identical across arms.
+    # relational: bool is the deprecated alias the learned stream was configured with before
+    # the arms existed; every fusion3 checkpoint carries it, so it stays readable. Resolve
+    # both through rel_mode rather than reading either field directly.
     relational: bool = False
+    relational_mode: Literal['none', 'learned', 'raw_agree', 'raw_edge'] | None = None
     rel_d_e: int = 16
     rel_num_layers: int = 3
     rel_num_heads: int = 4
     num_classes: int = 2
+
+    @property
+    def rel_mode(self) -> Literal['none', 'learned', 'raw_agree', 'raw_edge']:
+        """The stream to build, resolving the deprecated `relational` alias.
+
+        A config predating the arms sets only `relational`; a config naming an arm sets only
+        `relational_mode`. Both set and disagreeing is a mistake worth raising on, because
+        `build_dataclass` ignores unknown keys and would otherwise build the wrong model in
+        silence.
+        """
+        if self.relational_mode is None:
+            return 'learned' if self.relational else 'none'
+        if self.relational and self.relational_mode != 'learned':
+            raise ValueError(
+                f'relational=True contradicts relational_mode={self.relational_mode!r}; '
+                'set one or the other.'
+            )
+        return self.relational_mode
 
 
 @dataclass

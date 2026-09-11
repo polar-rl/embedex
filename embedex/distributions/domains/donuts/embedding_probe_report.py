@@ -158,6 +158,7 @@ def latex_table(series: dict, mode: str, n_eval: int) -> str:
         r'\begin{table}[t]',
         r'  \centering',
         r'  \footnotesize',
+        r'  \setlength{\tabcolsep}{4pt}',
         rf'  \begin{{tabular}}{{{colspec}}}',
         r'    \toprule',
         '    ' + head,
