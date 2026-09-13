@@ -148,6 +148,20 @@ class DistributionEmbedding(eqx.Module):
 
         return mean_loss, jnp.mean(aux1), jnp.mean(aux2), norm
 
+    def gold_loss(
+        self,
+        xs: jax.Array,
+        weights: jax.Array,
+        gold: jax.Array,
+        params: jax.Array | None = None,
+        *,
+        key: jax.Array,
+    ) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
+        """Generator loss of `gold` given the embedding of the weighted set."""
+        z, norm = self.embed(xs, weights)
+        loss, aux1, aux2 = self.generator.loss(gold, z, params, key)
+        return loss, aux1, aux2, norm
+
 
 class FlowEmbedding(DistributionEmbedding):
     def log_prob(

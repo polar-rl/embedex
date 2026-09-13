@@ -128,10 +128,11 @@ class RelationalStream(eqx.Module):
     num_variables: int = eqx.field(static=True)
     num_classes: int = eqx.field(static=True)
     d_e: int = eqx.field(static=True)
+    node_dim: int = eqx.field(static=True)
 
-    def __init__(self, num_variables, num_classes, d_e, num_layers, num_heads, key):
+    def __init__(self, num_variables, num_classes, d_e, num_layers, num_heads, key, node_dim=0):
         ks = jax.random.split(key, num_layers + 3)
-        dm = num_variables
+        dm = node_dim or num_variables
         nh = _largest_divisor_leq(dm, num_heads)
         self.cell_embed = jax.random.normal(ks[0], (num_classes, d_e)) * 0.1
         self.Rproj = eqx.nn.Linear(d_e * d_e, d_e, key=ks[1])
@@ -140,10 +141,11 @@ class RelationalStream(eqx.Module):
         self.num_variables = num_variables
         self.num_classes = num_classes
         self.d_e = d_e
+        self.node_dim = dm
 
     @property
     def out_dim(self) -> int:
-        return self.num_variables * self.num_variables
+        return self.num_variables * self.node_dim
 
     def __call__(self, xs: jax.Array, weights: jax.Array | None = None) -> jax.Array:
         x_int = jnp.clip(

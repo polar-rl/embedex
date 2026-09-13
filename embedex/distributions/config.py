@@ -33,6 +33,7 @@ class EmbeddingConfig:
     rel_d_e: int = 16
     rel_num_layers: int = 3
     rel_num_heads: int = 4
+    rel_node_dim: int = 0
     num_classes: int = 2
 
     @property

@@ -70,6 +70,7 @@ class CausalARNet(eqx.Module):
     num_variables: int = eqx.field(static=True)
     rel_node_dim: int = eqx.field(static=True, default=0)
     moment_dim: int = eqx.field(static=True, default=0)
+    rel_node_width: int = eqx.field(static=True, default=0)
 
     def _static_inputs(self, sideinfo: jax.Array | None) -> jax.Array:
         h = self.pos_embeddings
@@ -77,8 +78,9 @@ class CausalARNet(eqx.Module):
             if self.rel_node_dim > 0:
                 # z = [mu ; Jhat(N*N)]; deliver [mu ; row_i] to node i's slot (node-aligned)
                 n = self.rel_node_dim
+                w = self.rel_node_width or n
                 mu = sideinfo[: self.moment_dim]
-                jrows = sideinfo[self.moment_dim :].reshape(n, n)
+                jrows = sideinfo[self.moment_dim :].reshape(n, w)
                 pernode = jnp.concatenate(
                     [jnp.broadcast_to(mu, (n, self.moment_dim)), jrows], axis=-1
                 )

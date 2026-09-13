@@ -83,6 +83,7 @@ def create_relational(config: ModelConfig, key: jax.Array) -> eqx.Module | None:
         num_layers=emb.rel_num_layers,
         num_heads=emb.rel_num_heads,
         key=key,
+        node_dim=emb.rel_node_dim,
     )
 
 
@@ -230,6 +231,13 @@ def create_dfm_model(
     num_classes = gen.dfm_num_classes
 
     if gen.dfm_denoiser == 'attention':
+        if config.embedding.rel_mode == 'learned' and config.embedding.rel_node_dim not in (
+            0,
+            config.input_dim,
+        ):
+            raise NotImplementedError(
+                'DFM attention denoiser assumes relational node width == num_variables'
+            )
         denoiser_net = create_attention_denoiser_net(
             num_classes=num_classes,
             num_variables=num_variables,
@@ -274,9 +282,13 @@ def create_ar_model(
     token_dim = gen.ar_token_dim
     keys = jax.random.split(key, gen.ar_num_layers + 6)
 
-    rel_node_dim = num_variables if config.embedding.rel_mode != 'none' else 0
-    moment_dim = conditioning_dim - rel_node_dim * rel_node_dim
-    cond_in = (moment_dim + rel_node_dim) if rel_node_dim else conditioning_dim
+    mode = config.embedding.rel_mode
+    rel_node_dim = num_variables if mode != 'none' else 0
+    node_width = (config.embedding.rel_node_dim or num_variables) if mode == 'learned' else (
+        num_variables if rel_node_dim else 0
+    )
+    moment_dim = conditioning_dim - rel_node_dim * node_width
+    cond_in = (moment_dim + node_width) if rel_node_dim else conditioning_dim
 
     bos_embedding = jax.random.normal(keys[0], (token_dim,)) * 0.02
     class_embeddings = jax.random.normal(keys[1], (num_classes, token_dim)) * 0.02
@@ -318,6 +330,7 @@ def create_ar_model(
         num_variables=num_variables,
         rel_node_dim=rel_node_dim,
         moment_dim=moment_dim,
+        rel_node_width=node_width,
     )
     return AutoregressiveModel(net=net, num_classes=num_classes, num_variables=num_variables)
 
