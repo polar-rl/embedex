@@ -150,6 +150,13 @@ def create_embedding_blocks(
     return blocks
 
 
+def generated_dim(config: ModelConfig) -> int:
+    """Dimension of the variable the generator models: `output_dim` when set, else the
+    encoder's `input_dim` (the two differ when the encoder sees extra per-element
+    features, as in NBF's likelihood features)."""
+    return int(config.output_dim) if config.output_dim is not None else int(config.input_dim)
+
+
 def create_generative_network(
     config: ModelConfig,
     conditioning_dim: int,
@@ -179,7 +186,7 @@ def create_fm_model(
 ) -> FlowMatchingModel:
     gen = config.generator
     velocity_net = create_velocity_net(
-        input_dim=config.input_dim,
+        input_dim=generated_dim(config),
         conditioning_dim=conditioning_dim,
         hidden_size=gen.fm_hidden_size,
         num_layers=gen.fm_num_layers,
@@ -190,11 +197,11 @@ def create_fm_model(
 
     model = FlowMatchingModel(
         velocity_net=velocity_net,
-        input_dim=config.input_dim,
+        input_dim=generated_dim(config),
         num_steps=gen.fm_num_steps,
         sigma_min=gen.fm_sigma_min,
     )
-    model.add_prior(distrax.Normal(0.0, 1.0), (config.input_dim,))
+    model.add_prior(distrax.Normal(0.0, 1.0), (generated_dim(config),))
 
     return model
 
@@ -227,13 +234,13 @@ def create_dfm_model(
     key: jax.Array,
 ) -> DiscreteFlowMatchingModel:
     gen = config.generator
-    num_variables = config.input_dim
+    num_variables = generated_dim(config)
     num_classes = gen.dfm_num_classes
 
     if gen.dfm_denoiser == 'attention':
         if config.embedding.rel_mode == 'learned' and config.embedding.rel_node_dim not in (
             0,
-            config.input_dim,
+            generated_dim(config),
         ):
             raise NotImplementedError(
                 'DFM attention denoiser assumes relational node width == num_variables'
@@ -277,7 +284,7 @@ def create_ar_model(
     key: jax.Array,
 ) -> AutoregressiveModel:
     gen = config.generator
-    num_variables = config.input_dim
+    num_variables = generated_dim(config)
     num_classes = gen.ar_num_classes
     token_dim = gen.ar_token_dim
     keys = jax.random.split(key, gen.ar_num_layers + 6)
@@ -465,7 +472,7 @@ def create_nf_model(
             dequant_cond_dim = conditioning_dim if gen.nf_condition_dequant else 0
             layers.append(
                 create_dequantization_layer(
-                    config.input_dim,
+                    generated_dim(config),
                     conditioning_dim=dequant_cond_dim,
                     hidden_size=gen.nf_dequant_hidden_size,
                     num_layers=gen.nf_dequant_num_layers,
@@ -475,9 +482,9 @@ def create_nf_model(
 
     for layer_key in keys:
         param_net = create_conditioned_mlp(
-            config.input_dim,
+            generated_dim(config),
             conditioning_dim,
-            config.input_dim * gen.nf_num_flow_params,
+            generated_dim(config) * gen.nf_num_flow_params,
             gen.nf_hidden_size,
             gen.nf_num_layers,
             conditioning=gen.conditioning,
@@ -486,15 +493,15 @@ def create_nf_model(
 
         layers.append(
             Coupling(
-                create_mask((config.input_dim,), (1,)),
+                create_mask((generated_dim(config),), (1,)),
                 param_net,
-                ParameterizedNLSq((config.input_dim,)),
+                ParameterizedNLSq((generated_dim(config),)),
                 dual=True,
             )
         )
 
     flow_network = NormalizingFlowModel(layers)
-    flow_network.add_prior(distrax.Normal(0.0, 1.0), (config.input_dim,))
+    flow_network.add_prior(distrax.Normal(0.0, 1.0), (generated_dim(config),))
 
     return flow_network
 

@@ -97,7 +97,7 @@ class GeneratorConfig:
 @dataclass
 class ModelConfig:
     input_dim: int = 2
-    output_dim: int = 2
+    output_dim: int | None = None
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
     generator: GeneratorConfig = field(default_factory=GeneratorConfig)
 
