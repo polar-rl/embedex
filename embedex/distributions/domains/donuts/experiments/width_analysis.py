@@ -75,7 +75,7 @@ def run_width_analysis(
     def generate_fn(donut, num_samples, key):
         sample_key, gen_key = jax.random.split(key, 2)
         xs = donut.sample(num_samples, key=sample_key)
-        embedding, _ = model.embed(xs, jnp.ones(xs.shape[0]))
+        embedding, _ = model.embed(xs)
         return model.generate(embedding, num_samples, key=gen_key)
 
     create_width_analysis_plot(

@@ -45,7 +45,7 @@ def _model_pmfs_chunk(
 ) -> jax.Array:
     def model_pmf(data_i: jax.Array, eval_key: jax.Array) -> jax.Array:
         embed_samples = data_i[:num_embedding_samples]
-        embedding, _ = model.embed(embed_samples, jnp.ones(embed_samples.shape[0]))
+        embedding, _ = model.embed(embed_samples)
         return jnp.exp(model_log_pmf(model, embedding, states, num_evals, eval_key))
 
     return jax.vmap(model_pmf)(data, keys)

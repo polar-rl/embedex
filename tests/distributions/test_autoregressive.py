@@ -17,7 +17,7 @@ def _build_ar(num_variables: int, conditioning_dim: int, relational: bool, key):
         ar_num_layers=3,
         ar_ff_multiplier=2,
     )
-    cfg = ModelConfig(input_dim=num_variables, output_dim=num_variables, generator=gen)
+    cfg = ModelConfig(input_dim=num_variables, generator=gen)
     cfg.embedding.relational = relational
     return create_generative_network(cfg, conditioning_dim, False, key)
 

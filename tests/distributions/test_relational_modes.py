@@ -26,7 +26,6 @@ MOMENT_DIM = 32
 def _config(mode, num_variables, num_classes):
     return ModelConfig(
         input_dim=num_variables,
-        output_dim=num_variables,
         embedding=EmbeddingConfig(
             block_type='set_transformer',
             embedding_dim=MOMENT_DIM,
@@ -75,27 +74,16 @@ def test_arm_parameter_counts_order_as_designed():
     assert 0 < count('raw_edge') < count('learned')
 
 
-def test_raw_agree_is_the_weighted_agreement_matrix():
+def test_raw_agree_is_the_agreement_matrix():
     rng = np.random.default_rng(1)
     xs = rng.integers(0, 4, size=(64, 9))
-    weights = rng.random(64)
     stream = _stream('raw_agree', 9, 4)
 
-    got = np.asarray(
-        stream(jnp.asarray(xs, dtype=jnp.float32), jnp.asarray(weights, dtype=jnp.float32))
-    )
-    normalized = weights / weights.sum()
-    want = np.einsum('s,sij->ij', normalized, (xs[:, :, None] == xs[:, None, :]).astype(float))
+    got = np.asarray(stream(jnp.asarray(xs, dtype=jnp.float32)))
+    want = np.mean((xs[:, :, None] == xs[:, None, :]).astype(float), axis=0)
 
     assert np.allclose(got.reshape(9, 9), want, atol=1e-6)
     assert np.allclose(np.diag(got.reshape(9, 9)), 1.0, atol=1e-6)
-
-
-def test_raw_agree_unweighted_matches_uniform_weights():
-    rng = np.random.default_rng(2)
-    xs = jnp.asarray(rng.integers(0, 2, size=(32, 18)), dtype=jnp.float32)
-    stream = _stream('raw_agree', 18, 2)
-    assert np.allclose(np.asarray(stream(xs)), np.asarray(stream(xs, jnp.ones(32))), atol=1e-6)
 
 
 def test_deprecated_alias_resolves_to_learned():

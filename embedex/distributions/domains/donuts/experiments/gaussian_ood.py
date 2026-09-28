@@ -28,7 +28,7 @@ def create_ood_comparison_plot(
         samples = dist['samples']
 
         # Embed and generate
-        embedding, _ = model.embed(samples, jnp.ones(samples.shape[0]))
+        embedding, _ = model.embed(samples)
         generated = model.generate(embedding, num_samples, key=gen_key)
 
         # Plot original samples (top row)

@@ -4,7 +4,6 @@ from collections import defaultdict
 from pathlib import Path
 
 import jax
-import jax.numpy as jnp
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
@@ -60,7 +59,7 @@ def reconstruct(
     sample_key, gen_key = jax.random.split(key, 2)
 
     samples = mrf.sample(num_embedding_samples, sample_key)
-    embedding, _ = model.embed(samples, jnp.ones(samples.shape[0]))
+    embedding, _ = model.embed(samples)
     generated = model.generate(embedding, num_generated_samples, key=gen_key)
 
     return np.clip(np.round(np.array(generated)), 0, mrf.num_states - 1).astype(int)

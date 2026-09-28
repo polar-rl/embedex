@@ -49,14 +49,10 @@ def train(
         key, data_key, step_key = jax.random.split(key, 3)
 
         batch = generate_batch(config.batch_size, config.num_samples, data_key)
-        if isinstance(batch, tuple):
-            x, weights = batch
-        else:
-            x = batch
-            weights = jnp.ones(x.shape[:2])
+        x = batch[0] if isinstance(batch, tuple) else batch
 
         model, opt_state, loss_value, mean_norm = train_step(
-            model, optimizer, opt_state, x, weights, key=step_key
+            model, optimizer, opt_state, x, key=step_key
         )
 
         if i % config.log_interval == 0 or i == config.num_iterations - 1:
@@ -107,16 +103,15 @@ def train_step(
     optimizer: optax.GradientTransformation,
     opt_state: optax.OptState,
     x: jax.Array,
-    weights: jax.Array,
     key: jax.Array,
 ) -> tuple[DistributionEmbedding, optax.OptState, jax.Array, jax.Array]:
     @eqx.filter_value_and_grad(has_aux=True)
-    def compute_loss(model, x, weights, keys):
-        results = jax.vmap(model.loss)(x, weights, key=keys)
+    def compute_loss(model, x, keys):
+        results = jax.vmap(model.loss)(x, key=keys)
         return jnp.mean(results[0]), jnp.mean(results[3])
 
     keys = jax.random.split(key, x.shape[0])
-    (loss_value, mean_norm), grads = compute_loss(model, x, weights, keys)
+    (loss_value, mean_norm), grads = compute_loss(model, x, keys)
 
     updates, opt_state = optimizer.update(grads, opt_state, model)
     model = eqx.apply_updates(model, updates)

@@ -47,10 +47,47 @@ class EdgeAttn(eqx.Module):
         return jax.vmap(self.ln2)(h + jax.vmap(self.ff)(h))
 
 
-def _normalized_weights(xs: jax.Array, weights: jax.Array | None) -> jax.Array:
-    if weights is None:
-        return jnp.full(xs.shape[0], 1.0 / xs.shape[0])
-    return weights / (jnp.sum(weights) + 1e-30)
+class LikelihoodGate(eqx.Module):
+    """Per-(sample, variable) weights from per-sample likelihood features.
+
+    Variable i gates sample s by sigmoid(a_i * l_si + b_i), where l_si is that variable's own
+    likelihood feature when the features come one per variable and the shared scalar feature
+    otherwise. The weights are normalized over the samples for each variable, so with a
+    scalar feature and a gate that closes on unlikely samples they are the posterior weights
+    of the set; with no features every sample weighs the same.
+    """
+
+    a: jax.Array
+    b: jax.Array
+    num_variables: int = eqx.field(static=True)
+
+    def __init__(self, num_variables: int):
+        self.a = jnp.zeros(num_variables)
+        self.b = jnp.zeros(num_variables)
+        self.num_variables = num_variables
+
+    def __call__(self, num_samples: int, likelihood: jax.Array | None) -> jax.Array:
+        """(n, N) sample weights, each column summing to one."""
+        N = self.num_variables
+        if likelihood is None:
+            return jnp.full((num_samples, N), 1.0 / num_samples)
+        if likelihood.shape[-1] not in (1, N):
+            raise ValueError(
+                f'the relational stream takes one likelihood feature per variable ({N}) or one '
+                f'shared feature, got {likelihood.shape[-1]}'
+            )
+        g = jax.nn.sigmoid(self.a * likelihood.astype(jnp.float32) + self.b)
+        g = jnp.broadcast_to(g, (num_samples, N))
+        return g / (jnp.sum(g, axis=0, keepdims=True) + 1e-30)
+
+
+def pair_weights(w: jax.Array) -> jax.Array:
+    """(n, N, N) weights of sample s for the pair (i, j): the geometric mean of the two
+    variables' sample weights, normalized over the samples. Equal per-variable weights
+    give back the plain per-sample weight."""
+    sw = jnp.sqrt(w)
+    p = sw[:, :, None] * sw[:, None, :]
+    return p / (jnp.sum(p, axis=0, keepdims=True) + 1e-30)
 
 
 def _as_class_index(xs: jax.Array, num_variables: int, num_classes: int) -> jax.Array:
@@ -75,11 +112,11 @@ class RawAgreeStream(eqx.Module):
     def out_dim(self) -> int:
         return self.num_variables * self.num_variables
 
-    def __call__(self, xs: jax.Array, weights: jax.Array | None = None) -> jax.Array:
+    def __call__(self, xs: jax.Array, likelihood: jax.Array | None = None) -> jax.Array:
+        del likelihood  # the ablation arms weigh every sample the same
         x_int = _as_class_index(xs, self.num_variables, self.num_classes)
-        w = _normalized_weights(xs, weights)
-        agree = (x_int[:, :, None] == x_int[:, None, :]).astype(w.dtype)
-        return jnp.einsum('s,sij->ij', w, agree).reshape(-1)
+        agree = (x_int[:, :, None] == x_int[:, None, :]).astype(jnp.float32)
+        return jnp.mean(agree, axis=0).reshape(-1)
 
 
 class RawEdgeStream(eqx.Module):
@@ -111,12 +148,12 @@ class RawEdgeStream(eqx.Module):
     def out_dim(self) -> int:
         return self.num_variables * self.num_variables
 
-    def __call__(self, xs: jax.Array, weights: jax.Array | None = None) -> jax.Array:
+    def __call__(self, xs: jax.Array, likelihood: jax.Array | None = None) -> jax.Array:
+        del likelihood  # the ablation arms weigh every sample the same
         x_int = _as_class_index(xs, self.num_variables, self.num_classes)
-        w = _normalized_weights(xs, weights)
         N = self.num_variables
         e = self.cell_embed[x_int]
-        R = jnp.einsum('s,sid,sje->ijde', w, e, e)
+        R = jnp.einsum('sid,sje->ijde', e, e) / xs.shape[0]
         Rp = jax.vmap(jax.vmap(self.Rproj))(R.reshape(N, N, -1))
         return jax.vmap(jax.vmap(self.edge_out))(Rp).reshape(-1)
 
@@ -126,6 +163,7 @@ class RelationalStream(eqx.Module):
     Rproj: eqx.nn.Linear
     node_init: eqx.nn.Linear
     blocks: list
+    gate: LikelihoodGate
     num_variables: int = eqx.field(static=True)
     num_classes: int = eqx.field(static=True)
     d_e: int = eqx.field(static=True)
@@ -139,6 +177,7 @@ class RelationalStream(eqx.Module):
         self.Rproj = eqx.nn.Linear(d_e * d_e, d_e, key=ks[1])
         self.node_init = eqx.nn.Linear(d_e, dm, key=ks[2])
         self.blocks = [EdgeAttn(dm, d_e, nh, ks[3 + i]) for i in range(num_layers)]
+        self.gate = LikelihoodGate(num_variables)
         self.num_variables = num_variables
         self.num_classes = num_classes
         self.d_e = d_e
@@ -148,17 +187,14 @@ class RelationalStream(eqx.Module):
     def out_dim(self) -> int:
         return self.num_variables * self.node_dim
 
-    def __call__(self, xs: jax.Array, weights: jax.Array | None = None) -> jax.Array:
+    def __call__(self, xs: jax.Array, likelihood: jax.Array | None = None) -> jax.Array:
         x_int = _as_class_index(xs, self.num_variables, self.num_classes)
         e = self.cell_embed[x_int]
         N = self.num_variables
-        if weights is None:
-            w = jnp.full(xs.shape[0], 1.0 / xs.shape[0])
-        else:
-            w = weights / (jnp.sum(weights) + 1e-30)
-        R = jnp.einsum('s,sid,sje->ijde', w, e, e)
+        w = self.gate(xs.shape[0], likelihood)
+        R = jnp.einsum('sij,sid,sje->ijde', pair_weights(w), e, e)
         Rp = jax.vmap(jax.vmap(self.Rproj))(R.reshape(N, N, -1))
-        h = jax.vmap(self.node_init)(jnp.sum(e * w[:, None, None], axis=0))
+        h = jax.vmap(self.node_init)(jnp.sum(e * w[:, :, None], axis=0))
         for blk in self.blocks:
             h = blk(h, Rp)
         return h.reshape(-1)

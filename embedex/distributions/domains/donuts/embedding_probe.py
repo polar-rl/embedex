@@ -4,7 +4,6 @@ from pathlib import Path
 
 import equinox as eqx
 import jax
-import jax.numpy as jnp
 import numpy as np
 
 from embedex.checkpointing import load_ckpt
@@ -40,7 +39,7 @@ def parse_args() -> argparse.Namespace:
 @eqx.filter_jit
 def embed_chunk(model, embed_data: jax.Array) -> jax.Array:
     def per_dist(emb):
-        z, _ = model.embed(emb, jnp.ones(emb.shape[0]))
+        z, _ = model.embed(emb)
         return z
 
     return jax.vmap(per_dist)(embed_data)

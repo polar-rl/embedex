@@ -89,7 +89,7 @@ class DistributionEmbedding(eqx.Module):
     generator: flowee.Flow
     pools: list[eqx.Module] | None = None
     relational: eqx.Module | None = None
-    output_dim: int = eqx.field(static=True, default=0)
+    likelihood_dim: int = eqx.field(static=True, default=0)
 
     def generate(
         self,
@@ -102,66 +102,80 @@ class DistributionEmbedding(eqx.Module):
         keys = jax.random.split(key, num_samples)
         return jax.vmap(self.generator.sample, in_axes=(None, None, 0))(z, params, keys)
 
-    def embed(self, xs: jax.Array, weights: jax.Array) -> tuple[jax.Array, jax.Array]:
+    def embed(
+        self, xs: jax.Array, likelihood: jax.Array | None = None
+    ) -> tuple[jax.Array, jax.Array]:
+        """Embed the sample set `xs` (n, input_dim), each sample paired with its
+        `likelihood` features (n, likelihood_dim) when the model was built with any. The
+        set is uniformly weighted; each stream consumes the likelihood features its own way
+        (the moment stream as extra input columns, the relational stream through a learned
+        per-variable gate)."""
         n = xs.shape[0]
-        w = weights.reshape((-1, 1)) / (jnp.sum(weights) + 1e-30)
+        weights = jnp.full(n, 1.0 / n)
+        w = weights.reshape((-1, 1))
+        if self.likelihood_dim:
+            if likelihood is None or likelihood.shape != (n, self.likelihood_dim):
+                raise ValueError(
+                    f'embed() needs likelihood features of shape ({n}, {self.likelihood_dim})'
+                )
+            inputs = jnp.concatenate([xs, likelihood.astype(xs.dtype)], axis=-1)
+        else:
+            inputs = xs
 
         pool = None
         for i, block in enumerate(self.embedding_blocks):
             if pool is None:
-                block_input = xs
+                block_input = inputs
             else:
                 pool_broadcast = jnp.broadcast_to(pool, (n, pool.shape[0]))
-                block_input = jnp.concatenate([xs, pool_broadcast], axis=-1)
+                block_input = jnp.concatenate([inputs, pool_broadcast], axis=-1)
 
             zs = block(block_input, weights)
             pool = jnp.sum(zs * w, axis=0) if self.pools is None else self.pools[i](zs, weights)
 
         if self.relational is not None:
-            pool = jnp.concatenate([pool, self.relational(xs, weights)])
+            pool = jnp.concatenate([pool, self.relational(xs, likelihood)])
 
         return pool, jnp.linalg.norm(pool)
 
     def loss(
         self,
         xs: jax.Array,
-        weights: jax.Array,
+        likelihood: jax.Array | None = None,
         shuffle: bool = True,
         params: jax.Array | None = None,
         *,
         key: jax.Array,
     ) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
+        """Generator loss of one half of the set under the embedding of the other half."""
         if shuffle:
             key, shuffle_key = jax.random.split(key, 2)
             sinds = jax.random.permutation(shuffle_key, jnp.arange(xs.shape[0]))
-            xs, weights = xs[sinds], weights[sinds]
+            xs = xs[sinds]
+            likelihood = None if likelihood is None else likelihood[sinds]
 
         xs_train, xs_test = jnp.split(xs, 2, axis=0)
-        w_train, w_test = jnp.split(weights, 2, axis=0)
-        if self.output_dim:
-            xs_test = xs_test[:, : self.output_dim]
+        lik_train = None if likelihood is None else jnp.split(likelihood, 2, axis=0)[0]
 
-        z, norm = self.embed(xs_train, w_train)
+        z, norm = self.embed(xs_train, lik_train)
         keys = jax.random.split(key, xs_test.shape[0])
         loss, aux1, aux2 = jax.vmap(self.generator.loss, in_axes=(0, None, None, 0))(
             xs_test, z, params, keys
         )
 
-        mean_loss = jnp.sum(loss * w_test) / (jnp.sum(w_test) + 1e-30)
-
-        return mean_loss, jnp.mean(aux1), jnp.mean(aux2), norm
+        return jnp.mean(loss), jnp.mean(aux1), jnp.mean(aux2), norm
 
     def gold_loss(
         self,
         xs: jax.Array,
-        weights: jax.Array,
+        likelihood: jax.Array | None,
         gold: jax.Array,
         params: jax.Array | None = None,
         *,
         key: jax.Array,
     ) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
-        """Generator loss of `gold` given the embedding of the weighted set."""
-        z, norm = self.embed(xs, weights)
+        """Generator loss of `gold` given the embedding of the set."""
+        z, norm = self.embed(xs, likelihood)
         loss, aux1, aux2 = self.generator.loss(gold, z, params, key)
         return loss, aux1, aux2, norm
 

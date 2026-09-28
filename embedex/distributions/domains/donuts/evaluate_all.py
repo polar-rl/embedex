@@ -65,7 +65,7 @@ def eval_model_chunk(
 
     def per_dist(emb, hold, ref, t_mean, t_radius, t_width, k):
         gen_key, swd_key = jax.random.split(k, 2)
-        z, _ = model.embed(emb, jnp.ones(emb.shape[0]))
+        z, _ = model.embed(emb)
         generated = model.generate(z, num_generated, key=gen_key)
         # Exact log-density path; the stochastic trace estimator is biased in
         # probability space and inflates FM densities (see donuts/evaluate.py).

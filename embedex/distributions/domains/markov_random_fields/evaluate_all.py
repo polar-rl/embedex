@@ -134,7 +134,7 @@ def build_eval_set(dist: dict, args: argparse.Namespace, fam_id: str):
 
 @eqx.filter_jit
 def _embed_chunk(model, data: jax.Array) -> jax.Array:
-    return jax.vmap(lambda xs: model.embed(xs, jnp.ones(xs.shape[0]))[0])(data)
+    return jax.vmap(lambda xs: model.embed(xs)[0])(data)
 
 
 @eqx.filter_jit

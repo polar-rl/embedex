@@ -37,7 +37,7 @@ def _embed_donut(
     key: jax.Array,
 ) -> jax.Array:
     samples = sample_batch([donut], num_samples, key)[0]
-    return model.embed(samples, jnp.ones(samples.shape[0]))[0]
+    return model.embed(samples)[0]
 
 
 def run_compositional(

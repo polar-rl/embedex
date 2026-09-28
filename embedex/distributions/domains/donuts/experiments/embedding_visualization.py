@@ -32,7 +32,7 @@ def run_embedding_visualization(
     embeddings = []
     num = donuts.mean.shape[0]
     for i in range(num):
-        z, _ = model.embed(samples[i], jnp.ones(samples[i].shape[0]))
+        z, _ = model.embed(samples[i])
         embeddings.append(z)
 
     embeddings_np = np.array(jnp.stack(embeddings))

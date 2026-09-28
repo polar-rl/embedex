@@ -6,7 +6,6 @@ from collections import defaultdict
 from pathlib import Path
 
 import jax
-import jax.numpy as jnp
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
@@ -173,7 +172,7 @@ def create_density_contours_plot(
     color_cycler = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
     for sample_set, color in zip(samples, color_cycler, strict=False):
-        embedding, _ = model.embed(sample_set, jnp.ones(sample_set.shape[0]))
+        embedding, _ = model.embed(sample_set)
         log_probs, _, _ = model.log_prob(grid, embedding)
 
         density = np.exp(np.array(log_probs))

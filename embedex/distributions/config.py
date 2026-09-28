@@ -97,7 +97,7 @@ class GeneratorConfig:
 @dataclass
 class ModelConfig:
     input_dim: int = 2
-    output_dim: int | None = None
+    likelihood_dim: int = 0  # per-sample likelihood features handed to embed() beside the samples
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
     generator: GeneratorConfig = field(default_factory=GeneratorConfig)
 

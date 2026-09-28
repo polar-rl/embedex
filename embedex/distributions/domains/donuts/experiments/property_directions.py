@@ -70,8 +70,8 @@ def _compute_direction(
         low_samples = sample_batch([low_donut], num_samples, low_key)[0]
         high_samples = sample_batch([high_donut], num_samples, high_key)[0]
 
-        z_low, _ = model.embed(low_samples, jnp.ones(low_samples.shape[0]))
-        z_high, _ = model.embed(high_samples, jnp.ones(high_samples.shape[0]))
+        z_low, _ = model.embed(low_samples)
+        z_high, _ = model.embed(high_samples)
 
         directions.append(z_high - z_low)
 
@@ -103,7 +103,7 @@ def base_embedding(model: FlowEmbedding, config: ExperimentConfig, key: jax.Arra
     """Embedding of the canonical test donut that directions are added to."""
     base_donut = Donut(mean=jnp.array([0.0, 0.0]), radius=1.0, width=0.25)
     samples = sample_batch([base_donut], config.property_directions_num_samples, key)[0]
-    z, _ = model.embed(samples, jnp.ones(samples.shape[0]))
+    z, _ = model.embed(samples)
     return z
 
 
