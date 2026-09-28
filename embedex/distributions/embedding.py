@@ -118,7 +118,7 @@ class DistributionEmbedding(eqx.Module):
                 raise ValueError(
                     f'embed() needs likelihood features of shape ({n}, {self.likelihood_dim})'
                 )
-            inputs = jnp.concatenate([xs, likelihood.astype(xs.dtype)], axis=-1)
+            inputs = jnp.concatenate([xs, likelihood], axis=-1)
         else:
             inputs = xs
 
