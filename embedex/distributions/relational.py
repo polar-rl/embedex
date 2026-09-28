@@ -53,7 +53,8 @@ def _normalized_weights(xs: jax.Array, weights: jax.Array | None) -> jax.Array:
     return weights / (jnp.sum(weights) + 1e-30)
 
 
-def _as_class_index(xs: jax.Array, num_classes: int) -> jax.Array:
+def _as_class_index(xs: jax.Array, num_variables: int, num_classes: int) -> jax.Array:
+    xs = xs[:, :num_variables]
     return jnp.clip(jnp.round(xs.astype(jnp.float32)).astype(jnp.int32), 0, num_classes - 1)
 
 
@@ -75,7 +76,7 @@ class RawAgreeStream(eqx.Module):
         return self.num_variables * self.num_variables
 
     def __call__(self, xs: jax.Array, weights: jax.Array | None = None) -> jax.Array:
-        x_int = _as_class_index(xs, self.num_classes)
+        x_int = _as_class_index(xs, self.num_variables, self.num_classes)
         w = _normalized_weights(xs, weights)
         agree = (x_int[:, :, None] == x_int[:, None, :]).astype(w.dtype)
         return jnp.einsum('s,sij->ij', w, agree).reshape(-1)
@@ -111,7 +112,7 @@ class RawEdgeStream(eqx.Module):
         return self.num_variables * self.num_variables
 
     def __call__(self, xs: jax.Array, weights: jax.Array | None = None) -> jax.Array:
-        x_int = _as_class_index(xs, self.num_classes)
+        x_int = _as_class_index(xs, self.num_variables, self.num_classes)
         w = _normalized_weights(xs, weights)
         N = self.num_variables
         e = self.cell_embed[x_int]
@@ -148,9 +149,7 @@ class RelationalStream(eqx.Module):
         return self.num_variables * self.node_dim
 
     def __call__(self, xs: jax.Array, weights: jax.Array | None = None) -> jax.Array:
-        x_int = jnp.clip(
-            jnp.round(xs.astype(jnp.float32)).astype(jnp.int32), 0, self.num_classes - 1
-        )
+        x_int = _as_class_index(xs, self.num_variables, self.num_classes)
         e = self.cell_embed[x_int]
         N = self.num_variables
         if weights is None:

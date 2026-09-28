@@ -89,6 +89,7 @@ class DistributionEmbedding(eqx.Module):
     generator: flowee.Flow
     pools: list[eqx.Module] | None = None
     relational: eqx.Module | None = None
+    output_dim: int = eqx.field(static=True, default=0)
 
     def generate(
         self,
@@ -137,6 +138,8 @@ class DistributionEmbedding(eqx.Module):
 
         xs_train, xs_test = jnp.split(xs, 2, axis=0)
         w_train, w_test = jnp.split(weights, 2, axis=0)
+        if self.output_dim:
+            xs_test = xs_test[:, : self.output_dim]
 
         z, norm = self.embed(xs_train, w_train)
         keys = jax.random.split(key, xs_test.shape[0])
