@@ -50,34 +50,48 @@ class EdgeAttn(eqx.Module):
 class LikelihoodGate(eqx.Module):
     """Per-(sample, variable) weights from per-sample likelihood features.
 
-    Variable i gates sample s by sigmoid(a_i * l_si + b_i), where l_si is that variable's own
-    likelihood feature when the features come one per variable and the shared scalar feature
-    otherwise. The weights are normalized over the samples for each variable, so with a
-    scalar feature and a gate that closes on unlikely samples they are the posterior weights
-    of the set; with no features every sample weighs the same.
+    Variable i reads likelihood column `index[i]` (its own factor: the site's residual, the
+    ghost's match, or the one shared scalar) and gates sample s by sigmoid(a_i * l + b_i).
+    The weights are normalized over the samples for each variable, so with a scalar feature
+    and a gate that closes on unlikely samples they are the posterior weights of the set;
+    with no features every sample weighs the same.
     """
 
     a: jax.Array
     b: jax.Array
     num_variables: int = eqx.field(static=True)
+    index: tuple[int, ...] | None = eqx.field(static=True)
 
-    def __init__(self, num_variables: int):
+    def __init__(self, num_variables: int, index: tuple[int, ...] | None = None):
         self.a = jnp.zeros(num_variables)
         self.b = jnp.zeros(num_variables)
         self.num_variables = num_variables
+        if index is not None and len(index) != num_variables:
+            raise ValueError(
+                f'likelihood_index has {len(index)} entries for {num_variables} variables'
+            )
+        self.index = None if index is None else tuple(int(i) for i in index)
+
+    def columns(self, d: int) -> jax.Array:
+        """(N,) likelihood column each variable reads."""
+        N = self.num_variables
+        if self.index is not None:
+            return jnp.asarray(self.index, jnp.int32)
+        if d == 1:
+            return jnp.zeros(N, jnp.int32)
+        if d == N:
+            return jnp.arange(N, dtype=jnp.int32)
+        raise ValueError(
+            f'{d} likelihood features for {N} variables need an explicit likelihood_index'
+        )
 
     def __call__(self, num_samples: int, likelihood: jax.Array | None) -> jax.Array:
         """(n, N) sample weights, each column summing to one."""
         N = self.num_variables
         if likelihood is None:
             return jnp.full((num_samples, N), 1.0 / num_samples)
-        if likelihood.shape[-1] not in (1, N):
-            raise ValueError(
-                f'the relational stream takes one likelihood feature per variable ({N}) or one '
-                f'shared feature, got {likelihood.shape[-1]}'
-            )
-        g = jax.nn.sigmoid(self.a * likelihood.astype(jnp.float32) + self.b)
-        g = jnp.broadcast_to(g, (num_samples, N))
+        lik = likelihood.astype(jnp.float32)[:, self.columns(likelihood.shape[-1])]
+        g = jax.nn.sigmoid(self.a * lik + self.b)
         return g / (jnp.sum(g, axis=0, keepdims=True) + 1e-30)
 
 
@@ -169,7 +183,9 @@ class RelationalStream(eqx.Module):
     d_e: int = eqx.field(static=True)
     node_dim: int = eqx.field(static=True)
 
-    def __init__(self, num_variables, num_classes, d_e, num_layers, num_heads, key, node_dim=0):
+    def __init__(
+        self, num_variables, num_classes, d_e, num_layers, num_heads, key, node_dim=0, index=None
+    ):
         ks = jax.random.split(key, num_layers + 3)
         dm = node_dim or num_variables
         nh = _largest_divisor_leq(dm, num_heads)
@@ -177,7 +193,7 @@ class RelationalStream(eqx.Module):
         self.Rproj = eqx.nn.Linear(d_e * d_e, d_e, key=ks[1])
         self.node_init = eqx.nn.Linear(d_e, dm, key=ks[2])
         self.blocks = [EdgeAttn(dm, d_e, nh, ks[3 + i]) for i in range(num_layers)]
-        self.gate = LikelihoodGate(num_variables)
+        self.gate = LikelihoodGate(num_variables, index)
         self.num_variables = num_variables
         self.num_classes = num_classes
         self.d_e = d_e

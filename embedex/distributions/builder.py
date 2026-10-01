@@ -84,6 +84,7 @@ def create_relational(config: ModelConfig, key: jax.Array) -> eqx.Module | None:
         num_heads=emb.rel_num_heads,
         key=key,
         node_dim=emb.rel_node_dim,
+        index=config.likelihood_index,
     )
 
 

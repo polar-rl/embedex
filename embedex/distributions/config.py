@@ -98,6 +98,9 @@ class GeneratorConfig:
 class ModelConfig:
     input_dim: int = 2
     likelihood_dim: int = 0  # per-sample likelihood features handed to embed() beside the samples
+    # variable i -> the likelihood feature column its relational gate reads; None = the shared
+    # column when likelihood_dim is 1, one column per variable when it equals input_dim
+    likelihood_index: tuple[int, ...] | None = None
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
     generator: GeneratorConfig = field(default_factory=GeneratorConfig)
 

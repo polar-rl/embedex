@@ -1,6 +1,7 @@
 """embed(states, likelihood): the likelihood features reach the moment stream as columns and
 the learned relational stream as a gate, with the states' dtype never touching them."""
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -62,8 +63,6 @@ def test_gate_starts_uniform_and_pair_weights_reduce_to_sample_weights():
 
 
 def test_closed_gate_gives_posterior_pair_masses():
-    import equinox as eqx
-
     model = _model(1)
     a = jnp.full(N, 1.0)
     b = jnp.full(N, 15.0)
@@ -75,3 +74,25 @@ def test_closed_gate_gives_posterior_pair_masses():
     z_gated = stream(xs, lik)
     z_kept = stream(xs[kept], jnp.zeros((int(kept.sum()), 1)))
     assert np.allclose(np.asarray(z_gated), np.asarray(z_kept), atol=1e-4)
+
+
+def test_gate_index_maps_variables_to_their_factor():
+    # three variables per factor: an explicit index routes each variable to its column
+    index = (0, 0, 0, 1, 1, 1, 2, 2, 2)
+    gate = LikelihoodGate(N, index)
+    lik = jnp.zeros((8, 3)).at[:4, 1].set(-30.0)  # factor 1 rules out the first 4 samples
+    w = np.asarray(
+        eqx.tree_at(lambda g: (g.a, g.b), gate, (jnp.ones(N), jnp.full(N, 15.0)))(8, lik)
+    )
+    assert np.allclose(w[:, [0, 1, 2, 6, 7, 8]], 1 / 8, atol=1e-6)
+    assert np.allclose(w[:4, 3:6], 0.0, atol=1e-6) and np.allclose(w[4:, 3:6], 0.25, atol=1e-6)
+
+
+def test_gate_rejects_unmapped_feature_width():
+    gate = LikelihoodGate(N)
+    try:
+        gate(4, jnp.zeros((4, 3)))
+    except ValueError as e:
+        assert 'likelihood_index' in str(e)
+    else:
+        raise AssertionError('a 3-wide feature for 9 variables needs an index')
