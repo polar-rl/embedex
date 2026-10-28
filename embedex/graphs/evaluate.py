@@ -1,4 +1,5 @@
 import os
+from collections.abc import Callable
 
 import equinox as eqx
 import jax
@@ -19,7 +20,7 @@ from embedex.graphs.reconstructor import (
     recon_medians,
     recon_vertex_degrees,
 )
-from embedex.graphs.visualize import plot_geometry, plot_reconstructions
+from embedex.graphs.visualize import plot_geometry
 from embedex.logger import safe_log
 
 
@@ -54,6 +55,7 @@ def evaluate_reconstruction(
     embedding_network: GraphEmbedding,
     medians_network: MediansNetwork,
     generator: Generator,
+    plot_fn: Callable,
     key: jax.Array,
 ) -> None:
     key, sample_key, plot_key = jax.random.split(key, 3)
@@ -65,7 +67,7 @@ def evaluate_reconstruction(
     results, base_rate = score_reconstructions(embedding_network, medians_network, edges, adjs)
     report_reconstructions(cfg, results, base_rate, num_graphs)
 
-    plot_reconstructions(
+    plot_fn(
         embedding_network,
         medians_network,
         generator,

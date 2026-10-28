@@ -1,3 +1,5 @@
+from functools import partial
+
 import jax
 import jax.numpy as jnp
 import minfx.neptune_v2 as minfx
@@ -7,6 +9,7 @@ from embedex.graphs.evaluate import evaluate_embeddings, evaluate_reconstruction
 from embedex.graphs.families.config import ScaleFreeConfig, parse_args
 from embedex.graphs.generator import Generator
 from embedex.graphs.training import run_training_pipeline
+from embedex.graphs.visualize import plot_reconstructions
 from embedex.logger import log_cfg
 
 
@@ -66,7 +69,7 @@ def main(cfg: ScaleFreeConfig) -> None:
         cfg,
         generator,
         evaluate_embeddings,
-        evaluate_reconstruction,
+        partial(evaluate_reconstruction, plot_fn=plot_reconstructions),
     )
 
     save_ckpt((embedding_network, medians_network), cfg, cfg.training.num_iterations)
