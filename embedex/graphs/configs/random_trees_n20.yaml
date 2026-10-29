@@ -1,0 +1,31 @@
+run_name: random_trees_n20
+data:
+  num_vertices: 20
+model:
+  embedding:
+    embedding_size: 128
+    stage_block: set_transformer
+    num_stages: 2
+    num_heads: 4
+    num_inducing: 32
+    hidden_size: 64
+  allo:
+    eigfn_hidden_size: 1024
+    eigfn_num_hidden_layers: 3
+    penalty_coeff: 2.0
+    dual_reg: 0.003
+    num_dims: 16
+training:
+  schedule: cosine
+  learning_rate: 0.001
+  grad_clip_norm: 1.0
+  batch_size: 64
+  num_samples: 256
+  chunk_size: 256
+  num_iterations: 100000
+  reconstructor_num_iterations: 50000
+evaluation:
+  num_eval_graphs: 1024
+  num_eval_samples: 256
+seed: 0
+debug_mode: true
