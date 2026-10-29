@@ -38,10 +38,23 @@ build-backend = 'setuptools.build_meta'
 [tool.setuptools.packages.find]
 include = ['embedex*']
 
+[tool.uv]
+environments = [
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "sys_platform == 'darwin'",
+]
+
 [tool.pytest.ini_options]
+testpaths = ['tests']
+addopts = ['--import-mode=importlib']
+markers = ["slow: end-to-end runs of a whole training pipeline (deselect with -m 'not slow')"]
 filterwarnings = [
     # `tensorflow_probability` still touches deprecated JAX internals.
     'ignore:jax.core.pytype_aval_mappings is deprecated:DeprecationWarning',
+    # The experiment tracker's swagger dependencies use a deprecated `jsonschema` API.
+    'ignore:jsonschema.RefResolver is deprecated:DeprecationWarning',
+    # The experiment tracker looks for GPU monitoring libraries even in offline runs.
+    'ignore:.*NVML Shared Library Not Found',
 ]
 
 [tool.ruff]
@@ -65,9 +78,4 @@ select = [
 ignore = [
     'E501',  # line too long
     'E731',  # do not assign a lambda expression
-]
-[tool.uv]
-environments = [
-    "sys_platform == 'linux' and platform_machine == 'x86_64'",
-    "sys_platform == 'darwin'",
 ]
