@@ -41,7 +41,9 @@ def evaluate_embeddings(
 
     edges, adjs = generator.sample(num_graphs, num_samples, sample_key)
     geometry, base_rate = score_geometry(embedding_network, edges, adjs)
+    spectrum = score_spectrum(embedding_network, edges, adjs)
     report_geometry(cfg, geometry, base_rate)
+    report_spectrum(cfg, spectrum)
 
     plot_geometry(
         embedding_network,
@@ -149,6 +151,48 @@ def score_geometry(
     }
 
     return geometry, jnp.mean(edge_fracs)
+
+
+@eqx.filter_jit
+def score_spectrum(
+    embedding_network: GraphEmbedding, edges: jax.Array, adjs: jax.Array
+) -> dict[str, jax.Array]:
+    def _per_graph(edges, adj):
+        n = adj.shape[0]
+        transition = adj / jnp.sum(adj, keepdims=True, axis=1)
+        laplacian = jnp.eye(n) - 0.5 * (transition + jnp.transpose(transition))
+        true_vals, true_vecs = jnp.linalg.eigh(laplacian)
+
+        z = embedding_network.embed(edges)
+        learned_vecs = jax.vmap(lambda v: embedding_network.eigenfunctions(v, z))(jnp.eye(n))
+        learned_vals = embedding_network.eigenvalues(z)
+
+        d = learned_vals.shape[0]
+        order = jnp.argsort(learned_vals)
+        learned_vals, learned_vecs = learned_vals[order], learned_vecs[:, order]
+        true_vals, true_vecs = true_vals[:d], true_vecs[:, :d]
+
+        # Skip the trivial (constant) eigenpair at index 0.
+        def _unit(matrix):
+            return matrix / (jnp.linalg.norm(matrix, keepdims=True, axis=0) + 1e-12)
+
+        cosine = jnp.abs(jnp.sum(_unit(learned_vecs) * _unit(true_vecs), axis=0))[1:]
+        rel_error = (jnp.abs(learned_vals - true_vals) / (jnp.abs(true_vals) + 1e-6))[1:]
+
+        # Rotation-invariant: principal angles between the learned and true subspaces.
+        learned_basis, _ = jnp.linalg.qr(learned_vecs[:, 1:])
+        true_basis, _ = jnp.linalg.qr(true_vecs[:, 1:])
+        principal = jnp.linalg.svd(jnp.transpose(true_basis) @ learned_basis, compute_uv=False)
+
+        return jnp.mean(cosine), jnp.mean(rel_error), jnp.mean(principal**2)
+
+    cosine, rel_error, subspace = jax.vmap(_per_graph)(edges, adjs)
+
+    return {
+        'eigvec_cosine': jnp.nanmean(cosine),
+        'eigval_rel_error': jnp.nanmean(rel_error),
+        'eigvec_subspace': jnp.nanmean(subspace),
+    }
 
 
 @eqx.filter_jit
@@ -265,6 +309,19 @@ def report_geometry(cfg: Config, geometry: dict[str, jax.Array], base_rate: jax.
             safe_log(
                 cfg.run, 'eval/geometry/weight_spearman_edges', geometry['weight_spearman_edges']
             )
+
+
+def report_spectrum(cfg: Config, spectrum: dict[str, jax.Array]) -> None:
+    print(
+        f'Spectrum   '
+        f'eigvec cosine {spectrum["eigvec_cosine"]:.3f}   '
+        f'subspace overlap {spectrum["eigvec_subspace"]:.3f}   '
+        f'eigval rel-error {spectrum["eigval_rel_error"]:.3f}'
+    )
+
+    if hasattr(cfg, 'run'):
+        for key, value in spectrum.items():
+            safe_log(cfg.run, f'eval/spectrum/{key}', value)
 
 
 def report_reconstructions(
