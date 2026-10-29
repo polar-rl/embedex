@@ -22,6 +22,12 @@ class ScaleFreeDataConfig(DataConfig):
 
 
 @dataclass
+class GridWorldDataConfig(DataConfig):
+    grid_size: int = 4
+    num_walls: int = 3
+
+
+@dataclass
 class ArmsConfig(Config):
     data: ArmsDataConfig = field(default_factory=ArmsDataConfig)
     model_dir: str = 'models/graphs/arms'
@@ -40,6 +46,13 @@ class ScaleFreeConfig(Config):
     data: ScaleFreeDataConfig = field(default_factory=ScaleFreeDataConfig)
     model_dir: str = 'models/graphs/scale_free'
     figure_dir: str = 'figures/graphs/scale_free'
+
+
+@dataclass
+class GridWorldConfig(Config):
+    data: GridWorldDataConfig = field(default_factory=GridWorldDataConfig)
+    model_dir: str = 'models/graphs/gridworld'
+    figure_dir: str = 'figures/graphs/gridworld'
 
 
 def load_config[T](cfg_cls: type[T], path: str) -> T:

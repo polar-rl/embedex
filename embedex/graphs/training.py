@@ -12,14 +12,18 @@ from embedex.checkpointing import load_ckpt
 from embedex.graphs.builder import (
     build_from_config,
     create_embedding_network,
-    create_medians_network,
     create_optimizer,
 )
 from embedex.graphs.config import Config
 from embedex.graphs.embedding import GraphEmbedding
 from embedex.graphs.generator import Generator
 from embedex.graphs.metrics import ortho_violation
-from embedex.graphs.reconstructor import MediansNetwork, medians_loss
+from embedex.graphs.reconstructor import (
+    MediansNetwork,
+    TransitionNetwork,
+    medians_loss,
+    transition_loss,
+)
 from embedex.logger import log_param_count, safe_log
 
 
@@ -27,8 +31,10 @@ def run_training_pipeline(
     cfg: Config,
     generator: Generator,
     embedding_eval_fn: Callable,
-    medians_eval_fn: Callable,
-) -> tuple[GraphEmbedding, MediansNetwork]:
+    reconstructor_create_fn: Callable,
+    reconstructor_train_fn: Callable,
+    reconstructor_eval_fn: Callable,
+) -> tuple[GraphEmbedding, eqx.Module]:
     key = jax.random.key(cfg.seed)
 
     key, network_key = jax.random.split(key, 2)
@@ -45,15 +51,15 @@ def run_training_pipeline(
         embedding_eval_fn(cfg, embedding_network, generator, key=eval_key)
 
     key, network_key, train_key, eval_key = jax.random.split(key, 4)
-    medians_network = create_medians_network(cfg, network_key)
-    log_param_count(cfg, 'medians', medians_network)
+    reconstruction_network = reconstructor_create_fn(cfg, network_key)
+    log_param_count(cfg, 'reconstruction', reconstruction_network)
 
-    medians_network = train_medians_network(
-        cfg, embedding_network, medians_network, generator, train_key
+    reconstruction_network = reconstructor_train_fn(
+        cfg, embedding_network, reconstruction_network, generator, train_key
     )
-    medians_eval_fn(cfg, embedding_network, medians_network, generator, key=eval_key)
+    reconstructor_eval_fn(cfg, embedding_network, reconstruction_network, generator, key=eval_key)
 
-    return embedding_network, medians_network
+    return embedding_network, reconstruction_network
 
 
 def train_graph_embeddings(
@@ -140,12 +146,52 @@ def train_medians_network(
             for loss_value in losses:
                 safe_log(cfg.run, 'train/medians/loss', loss_value)
 
-    opt = optax.adam(cfg.training.medians_learning_rate)
+    opt = optax.adam(cfg.training.reconstructor_learning_rate)
     opt_state = opt.init(eqx.filter(medians_network, eqx.is_inexact_array))
 
     state = run_chunked_training(
         (medians_network, opt_state, key),
-        cfg.training.medians_num_iterations,
+        cfg.training.reconstructor_num_iterations,
+        cfg.training.chunk_size,
+        train_step,
+        on_chunk,
+    )
+
+    return state[0]
+
+
+def train_transition_network(
+    cfg: Config,
+    embedding_network: GraphEmbedding,
+    transition_network: TransitionNetwork,
+    generator: Generator,
+    key: jax.Array,
+) -> TransitionNetwork:
+    def train_step(transition_network, opt_state, key):
+        @eqx.filter_value_and_grad
+        def compute_loss(transition_network, edges, key):
+            return transition_loss(transition_network, embedding_network, edges, key)
+
+        key, data_key, loss_key = jax.random.split(key, 3)
+        edges, _ = generator.sample(cfg.training.batch_size, cfg.training.num_samples, data_key)
+
+        loss_value, grads = compute_loss(transition_network, edges, loss_key)
+        updates, opt_state = opt.update(grads, opt_state, transition_network)
+        transition_network = eqx.apply_updates(transition_network, updates)
+
+        return (transition_network, opt_state, key), loss_value
+
+    def on_chunk(losses, _):
+        if hasattr(cfg, 'run'):
+            for loss_value in losses:
+                safe_log(cfg.run, 'train/transition/loss', loss_value)
+
+    opt = optax.adam(cfg.training.reconstructor_learning_rate)
+    opt_state = opt.init(eqx.filter(transition_network, eqx.is_inexact_array))
+
+    state = run_chunked_training(
+        (transition_network, opt_state, key),
+        cfg.training.reconstructor_num_iterations,
         cfg.training.chunk_size,
         train_step,
         on_chunk,

@@ -14,9 +14,11 @@ from embedex.graphs.embedding import GraphEmbedding
 from embedex.graphs.generator import Generator
 from embedex.graphs.reconstructor import (
     MediansNetwork,
+    TransitionNetwork,
     recon_average_degree,
     recon_medians,
     recon_vertex_degrees,
+    transition_distances,
 )
 from embedex.plotting import save_figure
 
@@ -88,6 +90,41 @@ def plot_reconstructions(
     for name, preds in strategies.items():
         fig, _, _ = create_graph_plot(preds, positions, f'Reconstruction ({name})')
         save_figure(fig, os.path.join(save_path, f'reconstruction_{name}.pdf'))
+
+
+def plot_weighted_reconstructions(
+    embedding_network: GraphEmbedding,
+    transition_network: TransitionNetwork,
+    generator: Generator,
+    num_graphs: int,
+    num_vertices: int,
+    num_samples: int,
+    save_path: str,
+    key: jax.Array,
+) -> None:
+    edges, adjs = generator.sample(num_graphs, num_samples, key)
+    truth = [np.asarray(a) / np.asarray(a).sum() for a in adjs]
+    support = [t > 0 for t in truth]
+
+    predictions = []
+    for e in edges:
+        z = embedding_network.embed(e)
+        distances = transition_distances(embedding_network, z, num_vertices)
+        predictions.append(np.asarray(transition_network(distances, z)))
+
+    num_cols = int(np.ceil(np.sqrt(num_graphs)))
+    side = int(round(num_vertices**0.5))
+    positions = (
+        _square_positions(num_vertices, num_graphs, num_cols)
+        if side * side == num_vertices
+        else None
+    )
+
+    fig, _, positions = create_weighted_plot(truth, support, positions, 'Ground Truth')
+    save_figure(fig, os.path.join(save_path, 'ground_truth_weights.pdf'))
+
+    fig, _, _ = create_weighted_plot(predictions, support, positions, 'Reconstruction')
+    save_figure(fig, os.path.join(save_path, 'reconstruction_weights.pdf'))
 
 
 def create_geometry_plot(
@@ -189,6 +226,96 @@ def create_graph_plot(
     ax.axis('off')
 
     return fig, ax, positions
+
+
+def create_weighted_plot(
+    weight_matrices: list[np.ndarray],
+    support: list[np.ndarray],
+    positions: list[Layout] | None = None,
+    title: str | None = None,
+) -> tuple[Figure, Axes, list[Layout]]:
+    num_graphs = len(weight_matrices)
+    num_cols = int(np.ceil(np.sqrt(num_graphs)))
+    num_rows = int(np.ceil(num_graphs / num_cols))
+
+    if positions is None:
+        positions = _grid_positions([s.astype(bool) for s in support], num_cols)
+
+    cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
+    fig, ax = plt.subplots(figsize=(num_cols * 3.5, num_rows * 3.5))
+
+    for i, w in enumerate(weight_matrices):
+        num_vertices = w.shape[0]
+        colour = cycle[i % len(cycle)]
+        pos = positions[i]
+
+        # Only the true edges, but every one of them -- no weight thresholding.
+        rows, cols = np.where(np.triu(support[i].astype(bool), k=1))
+        values = w[rows, cols]
+        norm = values / (values.max() + 1e-12)
+
+        segments = [[pos[int(a)], pos[int(b)]] for a, b in zip(rows, cols, strict=True)]
+        rgba = np.tile((*to_rgb(colour), 1.0), (len(segments), 1))
+        rgba[:, 3] = np.clip(0.3 + 0.6 * norm, 0.0, 1.0)
+
+        ax.add_collection(LineCollection(segments, colors=rgba, linewidths=0.5 + 3.0 * norm))
+
+        # Label every true edge with its weight at the edge midpoint.
+        for a, b, value in zip(rows, cols, values, strict=True):
+            a, b = int(a), int(b)
+            mid = ((pos[a][0] + pos[b][0]) / 2.0, (pos[a][1] + pos[b][1]) / 2.0)
+
+            ax.text(
+                *mid,
+                f'{value:.3f}',
+                fontsize=5,
+                ha='center',
+                va='center',
+                zorder=2,
+                bbox={'boxstyle': 'round,pad=0.1', 'fc': 'white', 'ec': 'none', 'alpha': 0.7},
+            )
+
+        xs = [pos[k][0] for k in range(num_vertices)]
+        ys = [pos[k][1] for k in range(num_vertices)]
+        ax.scatter(xs, ys, s=300.0, facecolors='white', edgecolors=colour, linewidths=1.2, zorder=3)
+
+        for k in range(num_vertices):
+            ax.text(xs[k], ys[k], str(k), ha='center', va='center', fontsize=8, zorder=4)
+
+    pad = 0.2
+    all_x = [x for p in positions for x, _ in p.values()]
+    all_y = [y for p in positions for _, y in p.values()]
+
+    if title is not None:
+        ax.set_title(title)
+
+    ax.set_xlim(min(all_x) - pad, max(all_x) + pad)
+    ax.set_ylim(min(all_y) - pad, max(all_y) + pad)
+    ax.set_aspect('equal')
+    ax.axis('off')
+
+    return fig, ax, positions
+
+
+def _square_positions(num_vertices: int, num_graphs: int, num_cols: int) -> list[Layout]:
+    side = int(round(num_vertices**0.5))
+    step = 1.0 + 0.3  # inter-graph gap, as a fraction of a graph's extent
+
+    positions = []
+    for i in range(num_graphs):
+        panel_row, panel_col = divmod(i, num_cols)
+
+        base = {}
+        for v in range(num_vertices):
+            r, c = divmod(v, side)
+            base[v] = (
+                c / (side - 1) + panel_col * step,
+                (1.0 - r / (side - 1)) - panel_row * step,
+            )
+
+        positions.append(base)
+
+    return positions
 
 
 def _grid_positions(masks: list[np.ndarray], num_cols: int) -> list[Layout]:

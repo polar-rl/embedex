@@ -50,9 +50,9 @@ class TrainingConfig:
     chunk_size: int = 256
     batch_size: int = 32
     num_samples: int = 200
-    # Medians stage
-    medians_learning_rate: float = 1e-3
-    medians_num_iterations: int = 100_000
+    # Reconstructor stage
+    reconstructor_learning_rate: float = 1e-3
+    reconstructor_num_iterations: int = 100_000
     # Checkpointing
     embedding_ckpt_path: str = ''
 

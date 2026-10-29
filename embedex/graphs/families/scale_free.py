@@ -5,10 +5,11 @@ import jax.numpy as jnp
 import minfx.neptune_v2 as minfx
 
 from embedex.checkpointing import save_ckpt
+from embedex.graphs.builder import create_medians_network
 from embedex.graphs.evaluate import evaluate_embeddings, evaluate_reconstruction
 from embedex.graphs.families.config import ScaleFreeConfig, parse_args
 from embedex.graphs.generator import Generator
-from embedex.graphs.training import run_training_pipeline
+from embedex.graphs.training import run_training_pipeline, train_medians_network
 from embedex.graphs.visualize import plot_reconstructions
 from embedex.logger import log_cfg
 
@@ -69,6 +70,8 @@ def main(cfg: ScaleFreeConfig) -> None:
         cfg,
         generator,
         evaluate_embeddings,
+        create_medians_network,
+        train_medians_network,
         partial(evaluate_reconstruction, plot_fn=plot_reconstructions),
     )
 

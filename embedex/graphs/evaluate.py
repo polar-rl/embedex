@@ -13,12 +13,16 @@ from embedex.graphs.metrics import (
     confusion_counts,
     precision_recall_f1,
     roc_auc,
+    spearman,
 )
 from embedex.graphs.reconstructor import (
     MediansNetwork,
+    TransitionNetwork,
     recon_average_degree,
     recon_medians,
+    recon_transitions,
     recon_vertex_degrees,
+    transition_distances,
 )
 from embedex.graphs.visualize import plot_geometry
 from embedex.logger import safe_log
@@ -79,24 +83,68 @@ def evaluate_reconstruction(
     )
 
 
+def evaluate_transitions(
+    cfg: Config,
+    embedding_network: GraphEmbedding,
+    transition_network: TransitionNetwork,
+    generator: Generator,
+    plot_fn: Callable,
+    key: jax.Array,
+) -> None:
+    key, sample_key, plot_key = jax.random.split(key, 3)
+
+    num_graphs = cfg.evaluation.num_eval_graphs
+    num_samples = cfg.evaluation.num_eval_samples
+
+    edges, adjs = generator.sample(num_graphs, num_samples, sample_key)
+    results = score_transitions(embedding_network, transition_network, edges, adjs)
+    report_transitions(cfg, results)
+
+    plot_fn(
+        embedding_network,
+        transition_network,
+        generator,
+        cfg.evaluation.num_plot_graphs,
+        cfg.model.input_size,
+        num_samples,
+        os.path.join(cfg.figure_dir, cfg.run_name),
+        plot_key,
+    )
+
+
 @eqx.filter_jit
 def score_geometry(
     embedding_network: GraphEmbedding, edges: jax.Array, adjs: jax.Array
 ) -> tuple[dict[str, jax.Array], jax.Array]:
     def _per_graph(edges, adj):
+        n = adj.shape[0]
         z = embedding_network.embed(edges)
-        distances = embedding_network.distance_matrix(jnp.eye(adj.shape[0]), z)
-        ground_truth = adj > 0.5
-        indices = jnp.triu_indices(adj.shape[0], k=1)
-        preds, targets = (-distances)[indices], ground_truth[indices]
+        distances = embedding_network.distance_matrix(jnp.eye(n), z)
 
-        return roc_auc(preds, targets), average_precision(preds, targets), jnp.mean(targets)
+        indices = jnp.triu_indices(n, k=1)
+        proximity = (-distances)[indices]
+        weights = adj[indices]
+        is_edge = weights > 0.0
 
-    aucs, aps, edge_fracs = jax.vmap(_per_graph)(edges, adjs)
+        num_pairs = n * (n - 1) // 2
+        num_zeros = num_pairs - jnp.sum(is_edge)
+        ceiling = jnp.sqrt(1.0 - (num_zeros**3 - num_zeros) / (num_pairs**3 - num_pairs))
+
+        return (
+            roc_auc(proximity, is_edge),
+            average_precision(proximity, is_edge),
+            spearman(proximity, weights) / ceiling,
+            spearman(proximity, weights, is_edge),
+            jnp.mean(is_edge),
+        )
+
+    aucs, aps, weight_rhos, weight_rhos_edges, edge_fracs = jax.vmap(_per_graph)(edges, adjs)
 
     geometry = {
         'roc_auc': jnp.nanmean(aucs),
         'avg_precision': jnp.nanmean(aps),
+        'weight_spearman': jnp.nanmean(weight_rhos),
+        'weight_spearman_edges': jnp.nanmean(weight_rhos_edges),
         'num_graphs_scored': jnp.sum(~jnp.isnan(aucs)),
     }
 
@@ -142,6 +190,54 @@ def score_reconstructions(
     return results, jnp.mean(edge_fracs)
 
 
+@eqx.filter_jit
+def score_transitions(
+    embedding_network: GraphEmbedding,
+    transition_network: TransitionNetwork,
+    edges: jax.Array,
+    adjs: jax.Array,
+) -> dict[str, jax.Array]:
+    def _per_graph(edges, adj):
+        n = adj.shape[0]
+        z = embedding_network.embed(edges)
+        distances = transition_distances(embedding_network, z, n)
+
+        target = adj / jnp.sum(adj)
+        true = target.reshape(-1)
+        edge_mask = true > 0
+        off_diag = (~jnp.eye(n, dtype=jnp.bool_)).reshape(-1)
+
+        num_pairs = n * n - n
+        num_zeros = num_pairs - jnp.sum(edge_mask)
+        ceiling = jnp.sqrt(1.0 - (num_zeros**3 - num_zeros) / (num_pairs**3 - num_pairs))
+
+        def _errors(predicted):
+            flat = predicted.reshape(-1)
+            rho_edges = spearman(flat, true, edge_mask)
+            rho_all = spearman(flat, true, off_diag) / ceiling
+
+            diff = (predicted - target) * off_diag.reshape(n, n)
+            mae = jnp.sum(jnp.abs(diff)) / num_pairs
+            rmse = jnp.sqrt(jnp.sum(diff**2) / num_pairs)
+
+            return rho_edges, rho_all, mae, rmse
+
+        return _errors(transition_network(distances, z)), _errors(recon_transitions(distances))
+
+    (re_l, ra_l, mae_l, rmse_l), (re_o, ra_o, mae_o, rmse_o) = jax.vmap(_per_graph)(edges, adjs)
+
+    return {
+        'learned_spearman': jnp.nanmean(re_l),
+        'learned_spearman_all': jnp.nanmean(ra_l),
+        'learned_mae': jnp.mean(mae_l),
+        'learned_rmse': jnp.mean(rmse_l),
+        'oracle_spearman': jnp.nanmean(re_o),
+        'oracle_spearman_all': jnp.nanmean(ra_o),
+        'oracle_mae': jnp.mean(mae_o),
+        'oracle_rmse': jnp.mean(rmse_o),
+    }
+
+
 def report_geometry(cfg: Config, geometry: dict[str, jax.Array], base_rate: jax.Array) -> None:
     print(
         f'Geometry   '
@@ -149,10 +245,26 @@ def report_geometry(cfg: Config, geometry: dict[str, jax.Array], base_rate: jax.
         f'(Chance AP {base_rate:.3f}, macro-averaged over {geometry["num_graphs_scored"]} graphs)'
     )
 
+    # The weight metrics are meaningful only for weighted graphs
+    weighted = not bool(jnp.isnan(geometry['weight_spearman_edges']))
+    if weighted:
+        print(
+            f'Weights    '
+            f'Spearman(prox, w) {geometry["weight_spearman"]:.3f} (all, rescaled)   '
+            f'edges-only {geometry["weight_spearman_edges"]:.3f}   '
+            f'(rank corr of proximity vs edge weight)'
+        )
+
     if hasattr(cfg, 'run'):
         safe_log(cfg.run, 'eval/geometry/roc_auc', geometry['roc_auc'])
         safe_log(cfg.run, 'eval/geometry/avg_precision', geometry['avg_precision'])
         safe_log(cfg.run, 'eval/geometry/base_rate', base_rate)
+
+        if weighted:
+            safe_log(cfg.run, 'eval/geometry/weight_spearman', geometry['weight_spearman'])
+            safe_log(
+                cfg.run, 'eval/geometry/weight_spearman_edges', geometry['weight_spearman_edges']
+            )
 
 
 def report_reconstructions(
@@ -179,3 +291,27 @@ def report_reconstructions(
             safe_log(cfg.run, f'eval/reconstruction/{name}/f1', m['f1'])
 
         safe_log(cfg.run, 'eval/reconstruction/base_rate', base_rate)
+
+
+def report_transitions(cfg: Config, results: dict[str, jax.Array]) -> None:
+    print('Reconstruction')
+    print(
+        f'    Spearman (edges)          learned {results["learned_spearman"]:.3f}   '
+        f'oracle {results["oracle_spearman"]:.3f}'
+    )
+    print(
+        f'    Spearman (all, rescaled)  learned {results["learned_spearman_all"]:.3f}   '
+        f'oracle {results["oracle_spearman_all"]:.3f}'
+    )
+    print(
+        f'    MAE  (off-diag)           learned {results["learned_mae"]:.4f}   '
+        f'oracle {results["oracle_mae"]:.4f}'
+    )
+    print(
+        f'    RMSE (off-diag)           learned {results["learned_rmse"]:.4f}   '
+        f'oracle {results["oracle_rmse"]:.4f}'
+    )
+
+    if hasattr(cfg, 'run'):
+        for key, value in results.items():
+            safe_log(cfg.run, f'eval/transition/{key}', value)

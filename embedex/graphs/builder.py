@@ -8,7 +8,7 @@ from embedex.config import build_dataclass
 from embedex.graphs.allo import ConditionedBetas, ConditionedEigenfunctions
 from embedex.graphs.config import Config, EmbeddingConfig
 from embedex.graphs.embedding import GraphEmbedding, PointwiseBlock, SetTransformerBlock
-from embedex.graphs.reconstructor import MediansNetwork
+from embedex.graphs.reconstructor import MediansNetwork, TransitionNetwork
 
 
 def create_embedding_network(cfg: Config, key: jax.Array) -> GraphEmbedding:
@@ -92,6 +92,18 @@ def create_medians_network(cfg: Config, key: jax.Array) -> MediansNetwork:
     return MediansNetwork(
         eqx.nn.MLP(
             cfg.model.input_size + cfg.model.embedding.embedding_size,
+            1,
+            cfg.model.reconstructor.hidden_size,
+            cfg.model.reconstructor.num_hidden_layers,
+            key=key,
+        )
+    )
+
+
+def create_transition_network(cfg: Config, key: jax.Array) -> TransitionNetwork:
+    return TransitionNetwork(
+        eqx.nn.MLP(
+            1 + cfg.model.embedding.embedding_size,
             1,
             cfg.model.reconstructor.hidden_size,
             cfg.model.reconstructor.num_hidden_layers,

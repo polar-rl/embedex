@@ -56,7 +56,7 @@ class GraphEmbedding(eqx.Module):
 
     def representation(self, vertices: jax.Array, z: jax.Array) -> jax.Array:
         uvs = jax.vmap(lambda v: self.eigenfunctions(v, z))(vertices)
-        return uvs[:, 1:] / jnp.sqrt(self.eigenvalues(z))[jnp.newaxis, 1:]
+        return uvs[:, 1:] / jnp.sqrt(jnp.clip(self.eigenvalues(z), 1e-3))[jnp.newaxis, 1:]
 
     def laplacian(self, vertices: jax.Array, z: jax.Array) -> jax.Array:
         uvs = jax.vmap(lambda v: self.eigenfunctions(v, z))(vertices)
