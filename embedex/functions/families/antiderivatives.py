@@ -7,7 +7,11 @@ from embedex.functions.embedding import FunctionEmbedding
 from embedex.functions.families.config import AntiderivativesConfig, parse_args
 from embedex.functions.families.derivatives import PolynomialGenerator, evaluate_embeddings
 from embedex.functions.generator import Generator
-from embedex.functions.metrics import evaluate_operator_mse, evaluate_operator_rel_l2
+from embedex.functions.metrics import (
+    evaluate_operator_rel_l2,
+    evaluate_operator_rel_max,
+    evaluate_operator_rmse,
+)
 from embedex.functions.operator import OperatorMapping
 from embedex.functions.training import run_training_pipeline
 from embedex.functions.visualize import plot_operator_reconstruction
@@ -42,34 +46,46 @@ def evaluate_antiderivative_operator(
         xs, ys, dys = generator.sample_degree(
             degree, cfg.evaluation.num_eval_functions, cfg.training.num_samples, key
         )
-        mse = evaluate_operator_mse(embedding_network, operator_network, generator, xs, ys, dys)
+        rmse = evaluate_operator_rmse(embedding_network, operator_network, generator, xs, ys, dys)
         rel_l2 = evaluate_operator_rel_l2(
             embedding_network, operator_network, generator, xs, ys, dys
         )
+        rel_max = evaluate_operator_rel_max(
+            embedding_network, operator_network, generator, xs, ys, dys
+        )
 
-        return mse, rel_l2
+        return rmse, rel_l2, rel_max
 
     eval_keys = jax.random.split(key, num_degrees)
-    mse_values, rel_l2_values = jax.vmap(_eval_degree)(jnp.arange(num_degrees), eval_keys)
+    rmse_values, rel_l2_values, rel_max_values = jax.vmap(_eval_degree)(
+        jnp.arange(num_degrees), eval_keys
+    )
 
-    mses = {}
+    rmses = {}
     for degree in range(num_degrees):
-        mses[f'Degree {degree}'] = mse_values[degree]
+        rmses[f'Degree {degree}'] = rmse_values[degree]
         print(
-            f'Degree {degree}: MSE: {mse_values[degree]:.6f}; Rel L2: {rel_l2_values[degree]:.6f}'
+            f'Degree {degree}: RMSE: {rmse_values[degree]:.8g}; '
+            f'Rel L2: {rel_l2_values[degree]:.8g}; Rel Max: {rel_max_values[degree]:.8g}'
         )
 
         if hasattr(cfg, 'run'):
-            safe_log(cfg.run, f'eval/operator/mse/degree_{degree}', mse_values[degree])
+            safe_log(cfg.run, f'eval/operator/rmse/degree_{degree}', rmse_values[degree])
             safe_log(cfg.run, f'eval/operator/rel_l2/degree_{degree}', rel_l2_values[degree])
+            safe_log(cfg.run, f'eval/operator/rel_max/degree_{degree}', rel_max_values[degree])
 
-    overall_mse = jnp.mean(mse_values)
+    overall_rmse = jnp.mean(rmse_values)
     overall_rel_l2 = jnp.mean(rel_l2_values)
-    print(f'Overall: MSE: {overall_mse:.6f}; Rel L2: {overall_rel_l2:.6f}')
+    overall_rel_max = jnp.mean(rel_max_values)
+    print(
+        f'Operator: RMSE: {overall_rmse:.8g}; '
+        f'Rel L2: {overall_rel_l2:.8g}; Rel Max: {overall_rel_max:.8g}'
+    )
 
     if hasattr(cfg, 'run'):
-        safe_log(cfg.run, 'eval/operator/mse/overall', overall_mse)
+        safe_log(cfg.run, 'eval/operator/rmse/overall', overall_rmse)
         safe_log(cfg.run, 'eval/operator/rel_l2/overall', overall_rel_l2)
+        safe_log(cfg.run, 'eval/operator/rel_max/overall', overall_rel_max)
 
     num_plots = min(4, num_degrees)
 
@@ -105,7 +121,7 @@ def evaluate_antiderivative_operator(
         plot_ys,
         eval_grid,
         plot_preds,
-        mses,
+        rmses,
         generator.x_range,
         "Learned Antidifferential Operator: $A(\\mathrm{embed}(f'), f(x_0)) \\approx "
         '\\mathrm{embed}(F)$',

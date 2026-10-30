@@ -7,10 +7,12 @@ from embedex.functions.config import Config
 from embedex.functions.embedding import FunctionEmbedding
 from embedex.functions.generator import Generator
 from embedex.functions.metrics import (
-    evaluate_mse,
-    evaluate_operator_mse,
     evaluate_operator_rel_l2,
+    evaluate_operator_rel_max,
+    evaluate_operator_rmse,
     evaluate_rel_l2,
+    evaluate_rel_max,
+    evaluate_rmse,
 )
 from embedex.functions.operator import OperatorMapping
 from embedex.logger import safe_log
@@ -30,9 +32,10 @@ def evaluate_embeddings(
     ts, ys, *_ = generator.sample(
         cfg.evaluation.num_eval_functions, cfg.evaluation.num_eval_samples, eval_key
     )
-    mse = evaluate_mse(embedding_network, ts, ys)
+    rmse = evaluate_rmse(embedding_network, ts, ys)
     rel_l2 = evaluate_rel_l2(embedding_network, ts, ys)
-    report_metrics(cfg, 'embedding', mse, rel_l2)
+    rel_max = evaluate_rel_max(embedding_network, ts, ys)
+    report_metrics(cfg, 'embedding', rmse, rel_l2, rel_max)
 
     ts_plot, ys_plot, *_ = generator.sample(
         cfg.evaluation.num_eval_plots, cfg.evaluation.num_eval_samples, plot_key
@@ -45,7 +48,7 @@ def evaluate_embeddings(
         eval_grid, jax.vmap(embedding_network.embed)(ts_plot_embed, ys_plot_embed)
     )
 
-    plot_fn(cfg, ts_plot, ys_plot, eval_grid, eval_preds, mse)
+    plot_fn(cfg, ts_plot, ys_plot, eval_grid, eval_preds, rmse)
 
 
 def evaluate_solution_operator(
@@ -63,11 +66,14 @@ def evaluate_solution_operator(
     ts, ys, params = generator.sample(
         cfg.evaluation.num_eval_functions, cfg.evaluation.num_eval_samples, eval_key
     )
-    mse = evaluate_operator_mse(embedding_network, operator_network, generator, ts, ys, params)
+    rmse = evaluate_operator_rmse(embedding_network, operator_network, generator, ts, ys, params)
     rel_l2 = evaluate_operator_rel_l2(
         embedding_network, operator_network, generator, ts, ys, params
     )
-    report_metrics(cfg, 'operator', mse, rel_l2)
+    rel_max = evaluate_operator_rel_max(
+        embedding_network, operator_network, generator, ts, ys, params
+    )
+    report_metrics(cfg, 'operator', rmse, rel_l2, rel_max)
 
     ts_plot, ys_plot, params_plot = generator.sample(
         cfg.evaluation.num_eval_plots, cfg.evaluation.num_eval_samples, plot_key
@@ -81,12 +87,15 @@ def evaluate_solution_operator(
         eval_grid, jax.vmap(operator_network)(sources)
     )
 
-    plot_fn(cfg, ts_plot, ys_plot, eval_grid, eval_preds, mse)
+    plot_fn(cfg, ts_plot, ys_plot, eval_grid, eval_preds, rmse)
 
 
-def report_metrics(cfg: Config, stage: str, mse: jax.Array, rel_l2: jax.Array) -> None:
-    print(f'{stage.capitalize()}: MSE: {mse:.6f}; Rel L2: {rel_l2:.6f}')
+def report_metrics(
+    cfg: Config, stage: str, rmse: jax.Array, rel_l2: jax.Array, rel_max: jax.Array
+) -> None:
+    print(f'{stage.capitalize()}: RMSE: {rmse:.8g}; Rel L2: {rel_l2:.8g}; Rel Max: {rel_max:.8g}')
 
     if hasattr(cfg, 'run'):
-        safe_log(cfg.run, f'eval/{stage}/mse', mse)
+        safe_log(cfg.run, f'eval/{stage}/rmse', rmse)
         safe_log(cfg.run, f'eval/{stage}/rel_l2', rel_l2)
+        safe_log(cfg.run, f'eval/{stage}/rel_max', rel_max)

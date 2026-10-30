@@ -16,10 +16,12 @@ from embedex.functions.config import Config
 from embedex.functions.embedding import FunctionEmbedding
 from embedex.functions.generator import Generator
 from embedex.functions.metrics import (
-    evaluate_mse,
-    evaluate_operator_mse,
     evaluate_operator_rel_l2,
+    evaluate_operator_rel_max,
+    evaluate_operator_rmse,
     evaluate_rel_l2,
+    evaluate_rel_max,
+    evaluate_rmse,
 )
 from embedex.functions.operator import OperatorMapping
 from embedex.logger import log_param_count, safe_log
@@ -125,12 +127,14 @@ def train_function_embeddings(
             eval_xs, eval_ys, *_ = generator.sample(
                 cfg.training.batch_size, cfg.training.num_samples, eval_key
             )
-            mse = evaluate_mse(embedding_network, eval_xs, eval_ys)
+            rmse = evaluate_rmse(embedding_network, eval_xs, eval_ys)
             rel_l2 = evaluate_rel_l2(embedding_network, eval_xs, eval_ys)
+            rel_max = evaluate_rel_max(embedding_network, eval_xs, eval_ys)
 
             if hasattr(cfg, 'run'):
-                safe_log(cfg.run, 'progress/embedding/mse', mse)
+                safe_log(cfg.run, 'progress/embedding/rmse', rmse)
                 safe_log(cfg.run, 'progress/embedding/rel_l2', rel_l2)
+                safe_log(cfg.run, 'progress/embedding/rel_max', rel_max)
 
     return embedding_network
 
@@ -186,16 +190,20 @@ def train_operator_network(
             eval_xs, eval_ys, eval_extra = generator.sample(
                 cfg.training.batch_size, cfg.training.num_samples, eval_key
             )
-            mse = evaluate_operator_mse(
+            rmse = evaluate_operator_rmse(
                 embedding_network, operator_network, generator, eval_xs, eval_ys, eval_extra
             )
             rel_l2 = evaluate_operator_rel_l2(
                 embedding_network, operator_network, generator, eval_xs, eval_ys, eval_extra
             )
+            rel_max = evaluate_operator_rel_max(
+                embedding_network, operator_network, generator, eval_xs, eval_ys, eval_extra
+            )
 
             if hasattr(cfg, 'run'):
-                safe_log(cfg.run, 'progress/operator/mse', mse)
+                safe_log(cfg.run, 'progress/operator/rmse', rmse)
                 safe_log(cfg.run, 'progress/operator/rel_l2', rel_l2)
+                safe_log(cfg.run, 'progress/operator/rel_max', rel_max)
 
     return operator_network
 
@@ -254,14 +262,18 @@ def train_operator_jointly(
             eval_xs, eval_ys, eval_extra = generator.sample(
                 cfg.training.batch_size, cfg.training.num_samples, eval_key
             )
-            mse = evaluate_operator_mse(
+            rmse = evaluate_operator_rmse(
                 embedding, operator, generator, eval_xs, eval_ys, eval_extra
             )
             rel_l2 = evaluate_operator_rel_l2(
                 embedding, operator, generator, eval_xs, eval_ys, eval_extra
             )
+            rel_max = evaluate_operator_rel_max(
+                embedding, operator, generator, eval_xs, eval_ys, eval_extra
+            )
             if hasattr(cfg, 'run'):
-                safe_log(cfg.run, 'progress/operator/mse', mse)
+                safe_log(cfg.run, 'progress/operator/rmse', rmse)
                 safe_log(cfg.run, 'progress/operator/rel_l2', rel_l2)
+                safe_log(cfg.run, 'progress/operator/rel_max', rel_max)
 
     return networks

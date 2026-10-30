@@ -15,7 +15,7 @@ def plot_samples_reconstruction(
     embedding_network: FunctionEmbedding,
     xs: dict[str, jax.Array],
     ys: dict[str, jax.Array],
-    mses: dict[str, float],
+    rmses: dict[str, float],
     x_range: tuple[float, float],
     suptitle: str,
     filename: str,
@@ -26,8 +26,7 @@ def plot_samples_reconstruction(
     fig, axes = plt.subplots(1, num_sub, figsize=(5 * num_sub, 4.5))
 
     x_low, x_high = x_range
-    margin = (x_high - x_low) * 0.05
-    eval_grid = jnp.linspace(x_low - margin, x_high + margin, 256)[:, jnp.newaxis]
+    eval_grid = jnp.linspace(x_low, x_high, 256)[:, jnp.newaxis]
 
     for ax, title in zip(axes, titles, strict=True):
         xi, yi = xs[title], ys[title]
@@ -70,12 +69,12 @@ def plot_samples_reconstruction(
             )
 
         ax.set_title(title)
-        ax.set_xlim(x_low - margin, x_high + margin)
+        ax.set_xlim(x_low, x_high)
         ax.set_xlabel('x')
         ax.set_ylabel('f(x)')
 
-        if title in mses:
-            _annotate_mse(ax, mses[title])
+        if title in rmses:
+            _annotate_rmse(ax, rmses[title])
 
     axes[0].legend(loc='best', fontsize='small')
     fig.suptitle(suptitle, fontsize=13)
@@ -88,7 +87,7 @@ def plot_operator_reconstruction(
     ys: dict[str, jax.Array],
     eval_grid: jax.Array,
     preds: dict[str, jax.Array],
-    mses: dict[str, float],
+    rmses: dict[str, float],
     x_range: tuple[float, float],
     suptitle: str,
     gt_label: str,
@@ -132,8 +131,8 @@ def plot_operator_reconstruction(
         ax.set_xlabel(x_label)
         ax.set_ylabel(y_label)
 
-        if title in mses:
-            _annotate_mse(ax, mses[title])
+        if title in rmses:
+            _annotate_rmse(ax, rmses[title])
 
     axes[0].legend(loc='best', fontsize='small')
     fig.suptitle(suptitle, fontsize=13)
@@ -146,7 +145,7 @@ def plot_reconstruction(
     ys: jax.Array,
     eval_grid: jax.Array,
     preds: jax.Array,
-    mse: float,
+    rmse: float,
     *,
     suptitle: str,
     filename: str,
@@ -182,7 +181,7 @@ def plot_reconstruction(
     ax.set_ylabel(y_label)
     ax.legend(loc='best', fontsize='small')
 
-    _annotate_mse(ax, mse)
+    _annotate_rmse(ax, rmse)
 
     fig.suptitle(suptitle, fontsize=13)
     save_figure(fig, os.path.join(cfg.figure_dir, cfg.run_name, f'{filename}.png'))
@@ -194,7 +193,7 @@ def plot_phase_portrait(
     ys: jax.Array,
     eval_grid: jax.Array,
     preds: jax.Array,
-    mse: float,
+    rmse: float,
     *,
     suptitle: str,
     filename: str,
@@ -239,7 +238,7 @@ def plot_phase_portrait(
     ax_phase.legend(loc='best', fontsize='small')
     ax_phase.set_aspect('equal', adjustable='datalim')
 
-    _annotate_mse(ax_0, mse)
+    _annotate_rmse(ax_0, rmse)
 
     fig.suptitle(suptitle, fontsize=13)
     save_figure(fig, os.path.join(cfg.figure_dir, cfg.run_name, f'{filename}.png'))
@@ -251,7 +250,7 @@ def plot_oscillator_reconstruction(
     ys: jax.Array,
     eval_grid: jax.Array,
     preds: jax.Array,
-    mse: float,
+    rmse: float,
     *,
     num_masses: int,
     suptitle: str,
@@ -259,7 +258,7 @@ def plot_oscillator_reconstruction(
 ) -> None:
     if num_masses == 1:
         plot_phase_portrait(
-            cfg, ts, ys, eval_grid, preds, mse, suptitle=suptitle, filename=filename
+            cfg, ts, ys, eval_grid, preds, rmse, suptitle=suptitle, filename=filename
         )
 
         return None
@@ -294,17 +293,17 @@ def plot_oscillator_reconstruction(
         ax.set_ylabel(f'$x_{{{mass + 1}}}(t)$')
 
     axes[0].legend(loc='best', fontsize='small')
-    _annotate_mse(axes[0], mse)
+    _annotate_rmse(axes[0], rmse)
 
     fig.suptitle(suptitle, fontsize=13)
     save_figure(fig, os.path.join(cfg.figure_dir, cfg.run_name, f'{filename}.png'))
 
 
-def _annotate_mse(ax: plt.Axes, mse: float) -> None:
+def _annotate_rmse(ax: plt.Axes, rmse: float) -> None:
     ax.text(
         0.95,
         0.05,
-        f'MSE = {float(mse):.4f}',
+        f'RMSE = {float(rmse):.4f}',
         transform=ax.transAxes,
         ha='right',
         va='bottom',
