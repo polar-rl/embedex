@@ -46,13 +46,21 @@ class PolynomialGenerator:
 
         return coeffs * mask
 
+    def evaluate(self, x: jax.Array, coeffs: jax.Array) -> tuple[jax.Array, jax.Array]:
+        """Polynomial values and derivatives at points `x` for the given coeffs."""
+
+        def _polynomial(xi, c):
+            return jnp.sum(c * jnp.power(xi, jnp.arange(c.shape[0])))
+
+        y = jax.vmap(_polynomial, in_axes=(0, None))(x, coeffs)
+        dy = jax.vmap(jax.grad(_polynomial), in_axes=(0, None))(x, coeffs)
+
+        return y, dy
+
     def _sample_one(
         self, degree: jax.Array, num_samples: int, key: jax.Array
     ) -> tuple[jax.Array, jax.Array, jax.Array]:
         """Sample a single polynomial of the given degree at random points."""
-
-        def _polynomial(x, coeffs):
-            return jnp.sum(coeffs * jnp.power(x, jnp.arange(coeffs.shape[0])))
 
         low, high = self.x_range
 
@@ -60,8 +68,7 @@ class PolynomialGenerator:
         coeffs = self._random_coeffs(degree, coeffs_key)
 
         x = jax.random.uniform(sample_key, (num_samples,), minval=low, maxval=high)
-        y = jax.vmap(_polynomial, in_axes=(0, None))(x, coeffs)
-        dy = jax.vmap(jax.grad(_polynomial), in_axes=(0, None))(x, coeffs)
+        y, dy = self.evaluate(x, coeffs)
 
         return x[:, jnp.newaxis], y[:, jnp.newaxis], dy[:, jnp.newaxis]
 

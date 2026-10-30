@@ -47,18 +47,8 @@ class LotkaVolterraGenerator(Generator):
         self.gamma_range = gamma_range
         self.delta_range = delta_range
 
-    def _sample_one(
-        self, num_samples: int, key: jax.Array
-    ) -> tuple[jax.Array, jax.Array, jax.Array]:
-        k1, k2, k3, k4, k5, k6, k7 = jax.random.split(key, 7)
-
-        t = jax.random.uniform(k1, (num_samples,), minval=self.t_range[0], maxval=self.t_range[1])
-        x0 = jax.random.uniform(k2, minval=self.x0_range[0], maxval=self.x0_range[1])
-        y0 = jax.random.uniform(k3, minval=self.y0_range[0], maxval=self.y0_range[1])
-        alpha = jax.random.uniform(k4, minval=self.alpha_range[0], maxval=self.alpha_range[1])
-        beta = jax.random.uniform(k5, minval=self.beta_range[0], maxval=self.beta_range[1])
-        gamma = jax.random.uniform(k6, minval=self.gamma_range[0], maxval=self.gamma_range[1])
-        delta = jax.random.uniform(k7, minval=self.delta_range[0], maxval=self.delta_range[1])
+    def trajectory(self, t: jax.Array, params: jax.Array) -> jax.Array:
+        x0, y0, alpha, beta, gamma, delta = params
 
         def vector_field(t, state, args):
             (x, y), (alpha, beta, gamma, delta) = state, args
@@ -77,10 +67,24 @@ class LotkaVolterraGenerator(Generator):
             saveat=diffrax.SaveAt(ts=t[order]),
             stepsize_controller=diffrax.PIDController(rtol=1e-6, atol=1e-6),
         )
-        states = solution.ys[jnp.argsort(order)]
+
+        return solution.ys[jnp.argsort(order)]
+
+    def _sample_one(
+        self, num_samples: int, key: jax.Array
+    ) -> tuple[jax.Array, jax.Array, jax.Array]:
+        k1, k2, k3, k4, k5, k6, k7 = jax.random.split(key, 7)
+
+        t = jax.random.uniform(k1, (num_samples,), minval=self.t_range[0], maxval=self.t_range[1])
+        x0 = jax.random.uniform(k2, minval=self.x0_range[0], maxval=self.x0_range[1])
+        y0 = jax.random.uniform(k3, minval=self.y0_range[0], maxval=self.y0_range[1])
+        alpha = jax.random.uniform(k4, minval=self.alpha_range[0], maxval=self.alpha_range[1])
+        beta = jax.random.uniform(k5, minval=self.beta_range[0], maxval=self.beta_range[1])
+        gamma = jax.random.uniform(k6, minval=self.gamma_range[0], maxval=self.gamma_range[1])
+        delta = jax.random.uniform(k7, minval=self.delta_range[0], maxval=self.delta_range[1])
         params = jnp.stack([x0, y0, alpha, beta, gamma, delta])
 
-        return t[:, jnp.newaxis], states, params
+        return t[:, jnp.newaxis], self.trajectory(t, params), params
 
     @eqx.filter_jit
     def sample(

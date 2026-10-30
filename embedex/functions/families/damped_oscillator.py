@@ -67,6 +67,17 @@ class DampedOscillatorGenerator(Generator):
 
         return jnp.block([[jnp.zeros((n, n)), identity], [-stiffness, -2.0 * gamma * identity]])
 
+    def trajectory(self, t: jax.Array, params: jax.Array) -> jax.Array:
+        n = self.num_masses
+
+        x0, v0 = params[:n], params[n : 2 * n]
+        gamma, omega, k = params[2 * n], params[2 * n + 1], params[2 * n + 2]
+
+        A = self._system_matrix(gamma, omega, k)
+        z0 = jnp.concatenate([x0, v0])
+
+        return jax.vmap(lambda ti: jax.scipy.linalg.expm(A * ti) @ z0)(t)
+
     def _sample_one(
         self, num_samples: int, key: jax.Array
     ) -> tuple[jax.Array, jax.Array, jax.Array]:
@@ -80,11 +91,9 @@ class DampedOscillatorGenerator(Generator):
         omega = jax.random.uniform(k5, minval=self.omega_range[0], maxval=self.omega_range[1])
         k = jax.random.uniform(k6, minval=self.coupling_range[0], maxval=self.coupling_range[1])
 
-        A = self._system_matrix(gamma, omega, k)
-        xvs = jax.vmap(lambda ti: jax.scipy.linalg.expm(A * ti) @ jnp.concatenate([x0, v0]))(t)
         params = jnp.concatenate([x0, v0, jnp.stack([gamma, omega, k])])
 
-        return t[:, jnp.newaxis], xvs, params
+        return t[:, jnp.newaxis], self.trajectory(t, params), params
 
     @eqx.filter_jit
     def sample(
