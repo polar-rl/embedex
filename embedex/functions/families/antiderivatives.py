@@ -19,15 +19,18 @@ from embedex.logger import log_cfg, safe_log
 
 
 class PolynomialAntiderivativeGenerator(PolynomialGenerator, Generator):
-    """Data generator for the antidifferential operator: (embed(f'), f(x0)) -> embed(f)."""
+    """Data generator for the antidifferential operator: (embed(f'), x0, f(x0)) -> embed(f).
+
+    The sample (x0, f(x0)) fixes the integration constant, which f' alone leaves undetermined.
+    """
 
     def operator_input_size(self, cfg: AntiderivativesConfig) -> int:
-        return cfg.model.embedding_size + 1
+        return cfg.model.embedding_size + 2
 
     def operator_input(
         self, embedding_network: FunctionEmbedding, x: jax.Array, y: jax.Array, dy: jax.Array
     ) -> jax.Array:
-        return jnp.concatenate([embedding_network.embed(x, dy), y[0]])
+        return jnp.concatenate([embedding_network.embed(x, dy), x[0], y[0]])
 
     def operator_ground_truth(self, x: jax.Array, y: jax.Array, dy: jax.Array) -> jax.Array:
         return y
@@ -44,7 +47,7 @@ def evaluate_antiderivative_operator(
 
     def _eval_degree(degree, key):
         xs, ys, dys = generator.sample_degree(
-            degree, cfg.evaluation.num_eval_functions, cfg.training.num_samples, key
+            degree, cfg.evaluation.num_eval_functions, cfg.evaluation.num_eval_samples, key
         )
         rmse = evaluate_operator_rmse(embedding_network, operator_network, generator, xs, ys, dys)
         rel_l2 = evaluate_operator_rel_l2(
@@ -123,7 +126,7 @@ def evaluate_antiderivative_operator(
         plot_preds,
         rmses,
         generator.x_range,
-        "Learned Antidifferential Operator: $A(\\mathrm{embed}(f'), f(x_0)) \\approx "
+        "Learned Antidifferential Operator: $A(\\mathrm{embed}(f'), x_0, f(x_0)) \\approx "
         '\\mathrm{embed}(F)$',
         'Ground Truth $F$',
         'Predicted $A(z)$',

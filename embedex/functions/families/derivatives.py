@@ -121,7 +121,7 @@ def evaluate_embeddings(
 
     def _eval_degree(degree, key):
         xs, ys, *_ = generator.sample_degree(
-            degree, cfg.evaluation.num_eval_functions, cfg.training.num_samples, key
+            degree, cfg.evaluation.num_eval_functions, cfg.evaluation.num_eval_samples, key
         )
 
         return (
@@ -200,7 +200,7 @@ def evaluate_differential_operator(
 
     def _eval_degree(degree, key):
         xs, ys, dys = generator.sample_degree(
-            degree, cfg.evaluation.num_eval_functions, cfg.training.num_samples, key
+            degree, cfg.evaluation.num_eval_functions, cfg.evaluation.num_eval_samples, key
         )
         rmse = evaluate_operator_rmse(embedding_network, operator_network, generator, xs, ys, dys)
         rel_l2 = evaluate_operator_rel_l2(
