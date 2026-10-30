@@ -5,7 +5,6 @@ for each of them, so a new family only needs an entry here; structure specific t
 tested next to it in `tests/graphs/families/`.
 """
 
-from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -160,11 +159,6 @@ def tiny_config(
 
 
 @pytest.fixture
-def key() -> jax.Array:
-    return jax.random.key(0)
-
-
-@pytest.fixture
 def make_config(tmp_path) -> Callable[..., Config]:
     """Builds a `tiny_config` whose model and figure directories live in `tmp_path`."""
 
@@ -199,33 +193,3 @@ def embedding_network(stage_block: str) -> GraphEmbedding:
     """An untrained embedding over 8-vertex graphs, for each kind of stage block."""
 
     return create_embedding_network(tiny_config(stage_block=stage_block), jax.random.key(1))
-
-
-class FakeRun:
-    """Stands in for an experiment-tracker run and records everything logged to it."""
-
-    def __init__(self) -> None:
-        self.series: dict[str, list] = defaultdict(list)
-        self.fields: dict[str, Any] = {}
-
-    def __getitem__(self, key: str) -> '_Handle':
-        return _Handle(self, key)
-
-    def __setitem__(self, key: str, value: Any) -> None:
-        self.fields[key] = value
-
-
-class _Handle:
-    def __init__(self, run: FakeRun, key: str) -> None:
-        self.run, self.key = run, key
-
-    def append(self, value: Any) -> None:
-        self.run.series[self.key].append(value)
-
-    def __setitem__(self, key: str, value: Any) -> None:
-        self.run.fields[f'{self.key}/{key}'] = value
-
-
-@pytest.fixture
-def fake_run() -> FakeRun:
-    return FakeRun()
