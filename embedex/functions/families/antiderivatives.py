@@ -146,7 +146,7 @@ def main(cfg: AntiderivativesConfig) -> None:
         cfg.data.x_range, cfg.data.coeff_range, cfg.data.min_degree, cfg.data.max_degree
     )
     embedding_network, operator_network = run_training_pipeline(
-        cfg, generator, evaluate_embeddings, evaluate_antiderivative_operator
+        cfg, generator, generator, evaluate_embeddings, evaluate_antiderivative_operator
     )
 
     save_ckpt((embedding_network, operator_network), cfg, step=cfg.training.num_iterations)

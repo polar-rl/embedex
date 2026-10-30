@@ -188,7 +188,8 @@ def evaluate_differential_operator(
     generator: PolynomialDerivativeGenerator,
     key: jax.Array,
 ) -> None:
-    num_degrees = generator.max_degree + 1
+    degrees = jnp.arange(generator.min_degree, generator.max_degree + 1)
+    num_degrees = int(degrees.shape[0])
 
     def _eval_degree(degree, key):
         xs, ys, dys = generator.sample_degree(
@@ -205,22 +206,21 @@ def evaluate_differential_operator(
         return rmse, rel_l2, rel_max
 
     eval_keys = jax.random.split(key, num_degrees)
-    rmse_values, rel_l2_values, rel_max_values = jax.vmap(_eval_degree)(
-        jnp.arange(num_degrees), eval_keys
-    )
+    rmse_values, rel_l2_values, rel_max_values = jax.vmap(_eval_degree)(degrees, eval_keys)
 
     rmses = {}
-    for degree in range(num_degrees):
-        rmses[f'Degree {degree}'] = rmse_values[degree]
+    for i in range(num_degrees):
+        degree = int(degrees[i])
+        rmses[f'Degree {degree}'] = rmse_values[i]
         print(
-            f'Degree {degree}: RMSE: {rmse_values[degree]:.8g}; '
-            f'Rel L2: {rel_l2_values[degree]:.8g}; Rel Max: {rel_max_values[degree]:.8g}'
+            f'Degree {degree}: RMSE: {rmse_values[i]:.8g}; '
+            f'Rel L2: {rel_l2_values[i]:.8g}; Rel Max: {rel_max_values[i]:.8g}'
         )
 
         if hasattr(cfg, 'run'):
-            safe_log(cfg.run, f'eval/operator/rmse/degree_{degree}', rmse_values[degree])
-            safe_log(cfg.run, f'eval/operator/rel_l2/degree_{degree}', rel_l2_values[degree])
-            safe_log(cfg.run, f'eval/operator/rel_max/degree_{degree}', rel_max_values[degree])
+            safe_log(cfg.run, f'eval/operator/rmse/degree_{degree}', rmse_values[i])
+            safe_log(cfg.run, f'eval/operator/rel_l2/degree_{degree}', rel_l2_values[i])
+            safe_log(cfg.run, f'eval/operator/rel_max/degree_{degree}', rel_max_values[i])
 
     overall_rmse = jnp.mean(rmse_values)
     overall_rel_l2 = jnp.mean(rel_l2_values)
@@ -238,9 +238,7 @@ def evaluate_differential_operator(
     num_plots = min(4, num_degrees)
 
     key, degree_key = jax.random.split(key, 2)
-    plot_degrees = jnp.sort(
-        jax.random.choice(degree_key, jnp.arange(num_degrees), (num_plots,), replace=False)
-    )
+    plot_degrees = jnp.sort(jax.random.choice(degree_key, degrees, (num_plots,), replace=False))
 
     x_low, x_high = generator.x_range
     eval_grid = jnp.linspace(x_low, x_high, 256)[:, jnp.newaxis]
@@ -287,11 +285,17 @@ def main(cfg: DerivativesConfig) -> None:
     )
     log_cfg(cfg.run, cfg)
 
-    generator = PolynomialDerivativeGenerator(
-        cfg.data.x_range, cfg.data.coeff_range, cfg.data.min_degree, cfg.data.max_degree
-    )
+    def _polynomials(min_degree):
+        return PolynomialDerivativeGenerator(
+            cfg.data.x_range, cfg.data.coeff_range, min_degree, cfg.data.max_degree
+        )
+
     embedding_network, operator_network = run_training_pipeline(
-        cfg, generator, evaluate_embeddings, evaluate_differential_operator
+        cfg,
+        _polynomials(cfg.data.min_degree),
+        _polynomials(cfg.data.operator_min_degree),
+        evaluate_embeddings,
+        evaluate_differential_operator,
     )
 
     save_ckpt((embedding_network, operator_network), cfg, step=cfg.training.num_iterations)

@@ -125,6 +125,7 @@ def main(cfg: LotkaVolterraConfig) -> None:
     embedding_network, operator_network = run_training_pipeline(
         cfg,
         generator,
+        generator,
         partial(
             evaluate_embeddings,
             plot_fn=partial(

@@ -30,6 +30,7 @@ from embedex.logger import log_param_count, safe_log
 def run_training_pipeline(
     cfg: Config,
     generator: Generator,
+    operator_generator: Generator,
     embedding_eval_fn: Callable,
     operator_eval_fn: Callable,
 ) -> tuple[FunctionEmbedding, OperatorMapping | None]:
@@ -38,7 +39,7 @@ def run_training_pipeline(
     if cfg.training.train_operator_jointly:
         key, embedding_key, operator_key, train_key, eval_key = jax.random.split(key, 5)
         embedding_network = create_embedding_network(cfg, embedding_key)
-        operator_network = create_operator_network(cfg, generator, operator_key)
+        operator_network = create_operator_network(cfg, operator_generator, operator_key)
         log_param_count(cfg, 'embedding', embedding_network)
         log_param_count(cfg, 'operator', operator_network)
 
@@ -46,12 +47,12 @@ def run_training_pipeline(
             cfg,
             embedding_network,
             operator_network,
-            generator,
+            operator_generator,
             train_key,
         )
 
         embedding_eval_fn(cfg, embedding_network, generator, key=eval_key)
-        operator_eval_fn(cfg, embedding_network, operator_network, generator, key=eval_key)
+        operator_eval_fn(cfg, embedding_network, operator_network, operator_generator, key=eval_key)
 
         return embedding_network, operator_network
 
@@ -72,17 +73,17 @@ def run_training_pipeline(
         return embedding_network, None
 
     key, network_key, train_key, eval_key = jax.random.split(key, 4)
-    operator_network = create_operator_network(cfg, generator, network_key)
+    operator_network = create_operator_network(cfg, operator_generator, network_key)
     log_param_count(cfg, 'operator', operator_network)
 
     operator_network = train_operator_network(
         cfg,
         embedding_network,
         operator_network,
-        generator,
+        operator_generator,
         train_key,
     )
-    operator_eval_fn(cfg, embedding_network, operator_network, generator, key=eval_key)
+    operator_eval_fn(cfg, embedding_network, operator_network, operator_generator, key=eval_key)
 
     return embedding_network, operator_network
 

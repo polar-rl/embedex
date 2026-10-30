@@ -11,6 +11,7 @@ class PolynomialConfig(DataConfig):
     coeff_range: tuple[float, float] = (-5.0, 5.0)
     min_degree: int = 0
     max_degree: int = 3
+    operator_min_degree: int = 1
 
 
 @dataclass
