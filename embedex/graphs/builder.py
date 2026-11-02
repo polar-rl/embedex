@@ -113,16 +113,16 @@ def create_transition_network(cfg: Config, key: jax.Array) -> TransitionNetwork:
 
 
 def create_optimizer(cfg: Config, num_steps: int) -> optax.GradientTransformation:
-    if cfg.training.schedule == 'constant':
+    if cfg.training.lr_schedule == 'constant':
         lr = cfg.training.learning_rate
-    elif cfg.training.schedule == 'cosine':
+    elif cfg.training.lr_schedule == 'cosine':
         lr = optax.cosine_decay_schedule(
             init_value=cfg.training.learning_rate,
             decay_steps=num_steps,
             alpha=0.0,
         )
     else:
-        raise ValueError(f'Unknown learning rate schedule: {cfg.training.schedule!r}')
+        raise ValueError(f'Unknown learning rate schedule: {cfg.training.lr_schedule!r}')
 
     opt = optax.optimistic_adam_v2(lr)
 

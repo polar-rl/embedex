@@ -4,8 +4,8 @@ data:
   max_degree: 3
   operator_min_degree: 1
 model:
-  embedding_size: 64
   embedding:
+    embedding_size: 64
     stage_block: set_transformer_dot_product
     num_stages: 2
     hidden_size: 64

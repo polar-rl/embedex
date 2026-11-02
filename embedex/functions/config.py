@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 class EmbeddingConfig:
     # 'concat', 'dot_product', 'set_transformer', or 'set_transformer_dot_product'
     stage_block: str = 'dot_product'
+    embedding_size: int = 64
     num_stages: int = 1
     hidden_size: int = 128
     num_hidden_layers: int = 2
@@ -38,7 +39,6 @@ class OperatorConfig:
 class ModelConfig:
     input_size: int = 1
     output_size: int = 1
-    embedding_size: int = 64
 
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
     evaluator: EvaluatorConfig = field(default_factory=EvaluatorConfig)
@@ -71,7 +71,7 @@ class TrainingConfig:
 class EvaluationConfig:
     num_eval_functions: int = 1024
     num_eval_samples: int = 256
-    num_eval_plots: int = 3
+    num_plot_functions: int = 3
 
 
 @dataclass

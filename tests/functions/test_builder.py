@@ -65,7 +65,7 @@ def test_operator_reads_the_familys_input_and_outputs_an_embedding(
 
     assert isinstance(operator.net, operator_type)
     source = jnp.ones(generator.operator_input_size(cfg))
-    assert operator(source).shape == (cfg.model.embedding_size,)
+    assert operator(source).shape == (cfg.model.embedding.embedding_size,)
 
 
 @pytest.mark.parametrize(

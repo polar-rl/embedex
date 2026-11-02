@@ -84,7 +84,7 @@ class TestOperatorTasks:
             generator.operator_input(embedding, x, y, dy), embedding.embed(x, y)
         )
         np.testing.assert_array_equal(generator.operator_ground_truth(x, y, dy), dy)
-        assert generator.operator_input_size(cfg) == cfg.model.embedding_size
+        assert generator.operator_input_size(cfg) == cfg.model.embedding.embedding_size
 
     def test_integration_maps_an_embedding_of_the_derivative_and_one_sample_to_the_function(
         self, setup
@@ -97,7 +97,7 @@ class TestOperatorTasks:
         np.testing.assert_array_equal(source[:-2], embedding.embed(x, dy))
         np.testing.assert_array_equal(source[-2:], [x[0, 0], y[0, 0]])
         np.testing.assert_array_equal(generator.operator_ground_truth(x, y, dy), y)
-        assert generator.operator_input_size(cfg) == cfg.model.embedding_size + 2
+        assert generator.operator_input_size(cfg) == cfg.model.embedding.embedding_size + 2
 
 
 def test_derivatives_train_the_operator_without_constants(

@@ -43,7 +43,7 @@ class ModelConfig:
 class TrainingConfig:
     # Optimization
     learning_rate: float = 1e-3
-    schedule: str = 'cosine'  # 'constant' or 'cosine'
+    lr_schedule: str = 'cosine'  # 'constant' or 'cosine'
     grad_clip_norm: float = 0.0
     # Training loop
     num_iterations: int = 100_000

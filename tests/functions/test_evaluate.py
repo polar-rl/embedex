@@ -47,7 +47,7 @@ class TestOdeEvaluation:
     @staticmethod
     def check_plot(cfg, generator, plot, stage: str) -> None:
         _, ts, ys, grid, preds, rmse = plot
-        num_plots, num_samples = cfg.evaluation.num_eval_plots, cfg.evaluation.num_eval_samples
+        num_plots, num_samples = cfg.evaluation.num_plot_functions, cfg.evaluation.num_eval_samples
 
         assert ts.shape == (num_plots, num_samples, 1)
         assert ys.shape == (num_plots, num_samples, cfg.model.output_size)

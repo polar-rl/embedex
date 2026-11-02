@@ -15,7 +15,7 @@ def test_decoders_predict_every_output_dimension(decoder, output_size, make_conf
     cfg.model.output_size = output_size
     evaluator = create_embedding_network(cfg, key).evaluator
 
-    prediction = evaluator(jnp.ones(1), jnp.ones(cfg.model.embedding_size))
+    prediction = evaluator(jnp.ones(1), jnp.ones(cfg.model.embedding.embedding_size))
 
     assert prediction.shape == (output_size,)
 

@@ -83,7 +83,7 @@ def test_transition_network_scores_every_pair_of_vertices(make_config, key):
 @pytest.mark.parametrize('grad_clip_norm', [0.0, 1.0])
 def test_optimizer_takes_finite_steps(make_config, schedule, grad_clip_norm):
     cfg = make_config()
-    cfg.training.schedule, cfg.training.grad_clip_norm = schedule, grad_clip_norm
+    cfg.training.lr_schedule, cfg.training.grad_clip_norm = schedule, grad_clip_norm
     params = {'w': jnp.zeros(3)}
 
     opt = create_optimizer(cfg, num_steps=10)
@@ -96,7 +96,7 @@ def test_optimizer_takes_finite_steps(make_config, schedule, grad_clip_norm):
 
 def test_unknown_schedule_is_rejected(make_config):
     cfg = make_config()
-    cfg.training.schedule = 'linear'
+    cfg.training.lr_schedule = 'linear'
 
     with pytest.raises(ValueError, match='schedule'):
         create_optimizer(cfg, num_steps=10)

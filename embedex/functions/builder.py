@@ -53,7 +53,7 @@ def create_embedding_blocks(
     def _embedding_mlp(in_size, key):
         return eqx.nn.MLP(
             in_size,
-            model.embedding_size,
+            embedding.embedding_size,
             embedding.hidden_size,
             embedding.num_hidden_layers,
             activation=activation,
@@ -62,7 +62,9 @@ def create_embedding_blocks(
 
     for i, stage_key in enumerate(stage_keys):
         if embedding.stage_block == 'concat':
-            in_size = model.input_size + model.output_size + (model.embedding_size if i > 0 else 0)
+            in_size = (
+                model.input_size + model.output_size + (embedding.embedding_size if i > 0 else 0)
+            )
             blocks.append(PointwiseConcatBlock(PointwiseBlock(_embedding_mlp(in_size, stage_key))))
         elif embedding.stage_block == 'dot_product':
             x_key, y_key, pool_key = jax.random.split(stage_key, 3)
@@ -71,17 +73,19 @@ def create_embedding_blocks(
                 DotProductBlock(
                     _embedding_mlp(model.input_size, x_key),
                     _embedding_mlp(model.output_size, y_key),
-                    _embedding_mlp(model.embedding_size, pool_key) if i > 0 else None,
+                    _embedding_mlp(embedding.embedding_size, pool_key) if i > 0 else None,
                 )
             )
         elif embedding.stage_block == 'set_transformer':
-            in_size = model.input_size + model.output_size + (model.embedding_size if i > 0 else 0)
+            in_size = (
+                model.input_size + model.output_size + (embedding.embedding_size if i > 0 else 0)
+            )
 
             blocks.append(
                 SetTransformerBlock(
                     BaseSetTransformerBlock(
                         in_size,
-                        model.embedding_size,
+                        embedding.embedding_size,
                         embedding.num_heads,
                         embedding.num_inducing,
                         embedding.hidden_size,
@@ -97,11 +101,11 @@ def create_embedding_blocks(
                     DotProductBlock(
                         _embedding_mlp(model.input_size, x_key),
                         _embedding_mlp(model.output_size, y_key),
-                        _embedding_mlp(model.embedding_size, pool_key) if i > 0 else None,
+                        _embedding_mlp(embedding.embedding_size, pool_key) if i > 0 else None,
                     ),
                     BaseSetTransformerBlock(
-                        model.embedding_size,
-                        model.embedding_size,
+                        embedding.embedding_size,
+                        embedding.embedding_size,
                         embedding.num_heads,
                         embedding.num_inducing,
                         embedding.hidden_size,
@@ -121,7 +125,7 @@ def create_evaluator(
     if evaluator.decoder == 'concat':
         return ConcatDecoder(
             net=eqx.nn.MLP(
-                model.input_size + model.embedding_size,
+                model.input_size + model.embedding.embedding_size,
                 model.output_size,
                 evaluator.hidden_size,
                 evaluator.num_hidden_layers,
@@ -133,7 +137,7 @@ def create_evaluator(
     if evaluator.decoder == 'attention':
         return AttentionDecoder(
             model.input_size,
-            model.embedding_size,
+            model.embedding.embedding_size,
             evaluator.qk_size,
             evaluator.kv_size,
             model.output_size,
@@ -148,7 +152,10 @@ def create_evaluator(
 
 def create_operator_network(cfg: Config, generator: Generator, key: jax.Array) -> OperatorMapping:
     operator_network = create_operator(
-        cfg.model.operator, generator.operator_input_size(cfg), cfg.model.embedding_size, key
+        cfg.model.operator,
+        generator.operator_input_size(cfg),
+        cfg.model.embedding.embedding_size,
+        key,
     )
 
     return OperatorMapping(operator_network)

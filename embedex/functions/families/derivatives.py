@@ -100,7 +100,7 @@ class PolynomialDerivativeGenerator(PolynomialGenerator, Generator):
     """Data generator for learning the differential operator: embed(f) -> embed(f')."""
 
     def operator_input_size(self, cfg: DerivativesConfig) -> int:
-        return cfg.model.embedding_size
+        return cfg.model.embedding.embedding_size
 
     def operator_input(
         self, embedding_network: FunctionEmbedding, x: jax.Array, y: jax.Array, dy: jax.Array
@@ -170,7 +170,7 @@ def evaluate_embeddings(
 
     plot_keys = jax.random.split(key, num_plots)
     xs, ys, _ = jax.vmap(generator.sample_degree, in_axes=(0, None, None, 0))(
-        plot_degrees, cfg.evaluation.num_eval_plots, cfg.evaluation.num_eval_samples, plot_keys
+        plot_degrees, cfg.evaluation.num_plot_functions, cfg.evaluation.num_eval_samples, plot_keys
     )
 
     plot_xs = {f'Degree {int(deg)}': xs[i] for i, deg in enumerate(plot_degrees)}
@@ -253,7 +253,7 @@ def evaluate_differential_operator(
 
     plot_keys = jax.random.split(key, num_plots)
     xs, ys, dys = jax.vmap(generator.sample_degree, in_axes=(0, None, None, 0))(
-        plot_degrees, cfg.evaluation.num_eval_plots, cfg.evaluation.num_eval_samples, plot_keys
+        plot_degrees, cfg.evaluation.num_plot_functions, cfg.evaluation.num_eval_samples, plot_keys
     )
 
     plot_xs, plot_dys, plot_preds = {}, {}, {}

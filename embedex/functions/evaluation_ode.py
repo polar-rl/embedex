@@ -38,7 +38,7 @@ def evaluate_embeddings(
     report_metrics(cfg, 'embedding', rmse, rel_l2, rel_max)
 
     ts_plot, ys_plot, *_ = generator.sample(
-        cfg.evaluation.num_eval_plots, cfg.evaluation.num_eval_samples, plot_key
+        cfg.evaluation.num_plot_functions, cfg.evaluation.num_eval_samples, plot_key
     )
     ts_plot_embed = ts_plot[:, : cfg.evaluation.num_eval_samples // 2]
     ys_plot_embed = ys_plot[:, : cfg.evaluation.num_eval_samples // 2]
@@ -76,7 +76,7 @@ def evaluate_solution_operator(
     report_metrics(cfg, 'operator', rmse, rel_l2, rel_max)
 
     ts_plot, ys_plot, params_plot = generator.sample(
-        cfg.evaluation.num_eval_plots, cfg.evaluation.num_eval_samples, plot_key
+        cfg.evaluation.num_plot_functions, cfg.evaluation.num_eval_samples, plot_key
     )
     sources = jax.vmap(generator.operator_input, in_axes=(None, 0, 0, 0))(
         embedding_network, ts_plot, ys_plot, params_plot

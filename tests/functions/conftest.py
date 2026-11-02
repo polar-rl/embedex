@@ -193,8 +193,8 @@ def tiny_config(
     cfg = family.config() if family is not None else Config()
 
     cfg.model.output_size = family.output_size if family is not None else 1
-    cfg.model.embedding_size = 8
     cfg.model.embedding.stage_block = stage_block
+    cfg.model.embedding.embedding_size = 8
     cfg.model.embedding.num_stages = 2
     cfg.model.embedding.hidden_size = 16
     cfg.model.embedding.num_hidden_layers = 1
@@ -217,7 +217,7 @@ def tiny_config(
 
     cfg.evaluation.num_eval_functions = 4
     cfg.evaluation.num_eval_samples = 16
-    cfg.evaluation.num_eval_plots = 2
+    cfg.evaluation.num_plot_functions = 2
 
     cfg.run_name = 'test'
     cfg.model_dir = f'{out_dir}/models'

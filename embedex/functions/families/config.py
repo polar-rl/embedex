@@ -6,7 +6,7 @@ from embedex.functions.config import Config, DataConfig
 
 
 @dataclass
-class PolynomialConfig(DataConfig):
+class PolynomialDataConfig(DataConfig):
     x_range: tuple[float, float] = (-4.0, 4.0)
     coeff_range: tuple[float, float] = (-5.0, 5.0)
     min_degree: int = 0
@@ -46,7 +46,7 @@ class LotkaVolterraDataConfig(DataConfig):
 
 @dataclass
 class DerivativesConfig(Config):
-    data: PolynomialConfig = field(default_factory=PolynomialConfig)
+    data: PolynomialDataConfig = field(default_factory=PolynomialDataConfig)
 
     model_dir: str = 'models/functions/derivatives'
     figure_dir: str = 'figures/functions/derivatives'
@@ -54,7 +54,7 @@ class DerivativesConfig(Config):
 
 @dataclass
 class AntiderivativesConfig(Config):
-    data: PolynomialConfig = field(default_factory=PolynomialConfig)
+    data: PolynomialDataConfig = field(default_factory=PolynomialDataConfig)
 
     model_dir: str = 'models/functions/antiderivatives'
     figure_dir: str = 'figures/functions/antiderivatives'

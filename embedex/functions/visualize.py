@@ -31,7 +31,7 @@ def plot_samples_reconstruction(
     for ax, title in zip(axes, titles, strict=True):
         xi, yi = xs[title], ys[title]
 
-        for i in range(cfg.evaluation.num_eval_plots):
+        for i in range(cfg.evaluation.num_plot_functions):
             zi = embedding_network.embed(
                 xi[i, : cfg.evaluation.num_eval_samples // 2],
                 yi[i, : cfg.evaluation.num_eval_samples // 2],
@@ -106,7 +106,7 @@ def plot_operator_reconstruction(
     for ax, title in zip(axes, titles, strict=True):
         xi, yi, pi = xs[title], ys[title], preds[title]
 
-        for i in range(cfg.evaluation.num_eval_plots):
+        for i in range(cfg.evaluation.num_plot_functions):
             color = f'C{i}'
 
             order = jnp.argsort(xi[i, :, 0])

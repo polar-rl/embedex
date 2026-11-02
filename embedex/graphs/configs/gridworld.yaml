@@ -17,7 +17,7 @@ model:
     dual_reg: 0.003
     num_dims: 12
 training:
-  schedule: cosine
+  lr_schedule: cosine
   learning_rate: 0.001
   grad_clip_norm: 1.0
   batch_size: 64
