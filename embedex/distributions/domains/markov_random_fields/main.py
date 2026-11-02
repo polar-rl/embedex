@@ -4,7 +4,7 @@ import jax
 
 from embedex.checkpointing import load_ckpt, save_ckpt
 from embedex.distributions.builder import build_from_config, create_model
-from embedex.distributions.domains.markov_random_fields.config import parse_args
+from embedex.distributions.domains.config import MRFConfig, parse_args
 from embedex.distributions.domains.markov_random_fields.mrf import random_mrfs, sample_batch
 from embedex.distributions.domains.markov_random_fields.plots import generate_paper_plots
 from embedex.distributions.training import train
@@ -12,8 +12,7 @@ from embedex.distributions.utils import plot_loss_curve, plot_norm_curve
 from embedex.logger import count_params
 
 
-def main() -> None:
-    cfg = parse_args()
+def main(cfg: MRFConfig) -> None:
     key = jax.random.key(cfg.seed)
 
     if cfg.model_ckpt is not None:
@@ -21,10 +20,10 @@ def main() -> None:
 
     figure_save_dir = os.path.join(cfg.figure_dir, cfg.run_name)
 
-    cfg.model.input_dim = cfg.distribution.num_spins
-    cfg.model.embedding.num_classes = cfg.distribution.num_states
+    cfg.model.input_dim = cfg.data.num_spins
+    cfg.model.embedding.num_classes = cfg.data.num_states
     if cfg.model.generator.flow_type == 'dfm':
-        cfg.model.generator.dfm_num_classes = cfg.distribution.num_states
+        cfg.model.generator.dfm_num_classes = cfg.data.num_states
 
     dequantize = cfg.model.generator.flow_type == 'nf'
 
@@ -37,15 +36,15 @@ def main() -> None:
             mrf_key, sample_key = jax.random.split(key, 2)
             mrfs = random_mrfs(
                 batch_size,
-                cfg.distribution.num_spins,
-                cfg.distribution.num_states,
-                cfg.distribution.coupling_scale,
-                cfg.distribution.bias_scale,
-                cfg.distribution.edge_prob,
+                cfg.data.num_spins,
+                cfg.data.num_states,
+                cfg.data.coupling_scale,
+                cfg.data.bias_scale,
+                cfg.data.edge_prob,
                 mrf_key,
-                graph_type=cfg.distribution.graph_type,
-                edge_prob_min=cfg.distribution.edge_prob_min,
-                edge_prob_max=cfg.distribution.edge_prob_max,
+                graph_type=cfg.data.graph_type,
+                edge_prob_min=cfg.data.edge_prob_min,
+                edge_prob_max=cfg.data.edge_prob_max,
             )
             return sample_batch(mrfs, num_samples, sample_key)
 
@@ -63,8 +62,8 @@ def main() -> None:
         )
 
     key, plots_key = jax.random.split(key, 2)
-    generate_paper_plots(model, figure_save_dir, cfg.visualization, cfg.distribution, plots_key)
+    generate_paper_plots(model, figure_save_dir, cfg.visualization, cfg.data, plots_key)
 
 
 if __name__ == '__main__':
-    main()
+    main(parse_args(MRFConfig))

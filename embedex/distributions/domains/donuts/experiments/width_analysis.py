@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 
-from embedex.distributions.domains.donuts.config import DonutDistributionConfig, ExperimentConfig
+from embedex.distributions.domains.config import DonutsDataConfig, DonutsEvaluationConfig
 from embedex.distributions.domains.donuts.donut import Donut, random_donuts, sample_batch
 from embedex.distributions.embedding import FlowEmbedding
 from embedex.plotting import save_figure
@@ -16,7 +16,7 @@ def create_width_analysis_plot(
     generate_fn: Callable[[Donut, int, jax.Array], jax.Array],
     num_distributions: int,
     num_samples: int,
-    distribution: DonutDistributionConfig,
+    distribution: DonutsDataConfig,
     save_path: str,
     key: jax.Array,
 ) -> None:
@@ -67,8 +67,8 @@ def create_width_analysis_plot(
 
 def run_width_analysis(
     model: FlowEmbedding,
-    config: ExperimentConfig,
-    distribution: DonutDistributionConfig,
+    config: DonutsEvaluationConfig,
+    distribution: DonutsDataConfig,
     save_path: str,
     key: jax.Array,
 ) -> None:

@@ -5,7 +5,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 
-from embedex.distributions.domains.donuts.config import ExperimentConfig
+from embedex.distributions.domains.config import DonutsEvaluationConfig
 from embedex.distributions.domains.donuts.donut import Donut, sample_batch
 from embedex.distributions.embedding import FlowEmbedding
 from embedex.distributions.utils import plot_model_density
@@ -80,7 +80,7 @@ def _compute_direction(
 
 def compute_property_directions(
     model: FlowEmbedding,
-    config: ExperimentConfig,
+    config: DonutsEvaluationConfig,
     key: jax.Array,
     props: list[str] | None = None,
 ) -> dict[str, jax.Array]:
@@ -99,7 +99,9 @@ def compute_property_directions(
     return directions
 
 
-def base_embedding(model: FlowEmbedding, config: ExperimentConfig, key: jax.Array) -> jax.Array:
+def base_embedding(
+    model: FlowEmbedding, config: DonutsEvaluationConfig, key: jax.Array
+) -> jax.Array:
     """Embedding of the canonical test donut that directions are added to."""
     base_donut = Donut(mean=jnp.array([0.0, 0.0]), radius=1.0, width=0.25)
     samples = sample_batch([base_donut], config.property_directions_num_samples, key)[0]
@@ -128,7 +130,7 @@ def draw_direction_panel(
 
 def run_property_directions(
     model: FlowEmbedding,
-    config: ExperimentConfig,
+    config: DonutsEvaluationConfig,
     save_path: str,
     key: jax.Array,
 ) -> None:

@@ -7,7 +7,7 @@ import numpy as np
 import seaborn
 from matplotlib.figure import Figure
 
-from embedex.distributions.domains.donuts.config import ExperimentConfig
+from embedex.distributions.domains.config import DonutsEvaluationConfig
 from embedex.distributions.embedding import FlowEmbedding
 from embedex.distributions.utils import plot_model_density
 from embedex.plotting import save_figure
@@ -64,7 +64,7 @@ def create_ood_comparison_plot(
 
 def run_gaussian_ood(
     model: FlowEmbedding,
-    config: ExperimentConfig,
+    config: DonutsEvaluationConfig,
     save_path: str,
     key: jax.Array,
 ) -> None:

@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 from embedex.checkpointing import load_ckpt
 from embedex.distributions.builder import build_from_config
-from embedex.distributions.domains.donuts.config import ExperimentConfig
+from embedex.distributions.domains.config import DonutsEvaluationConfig
 from embedex.distributions.domains.donuts.donut import Donut, sample_batch
 from embedex.distributions.domains.donuts.experiments.property_directions import (
     PROPERTY_LABELS,
@@ -42,7 +42,7 @@ def load(path: str, key: jax.Array) -> FlowEmbedding:
 
 def property_vectors_compare(
     models: dict[str, FlowEmbedding],
-    config: ExperimentConfig,
+    config: DonutsEvaluationConfig,
     steps: int,
     out_path: str,
     key: jax.Array,
@@ -94,7 +94,7 @@ def _interpolation_path(model: FlowEmbedding, start: jax.Array, num_steps: int) 
 
 def interpolation_compare(
     rows: list[tuple[str, FlowEmbedding]],
-    config: ExperimentConfig,
+    config: DonutsEvaluationConfig,
     out_path: str,
     key: jax.Array,
 ) -> None:
@@ -134,7 +134,7 @@ def interpolation_compare(
 
 def main() -> None:
     args = parse_args()
-    config = ExperimentConfig()
+    config = DonutsEvaluationConfig()
     key = jax.random.key(args.seed)
 
     k_st, k_wide = jax.random.split(key, 2)

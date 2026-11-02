@@ -8,7 +8,7 @@ import numpy as np
 
 from embedex.checkpointing import load_ckpt
 from embedex.distributions.builder import build_from_config
-from embedex.distributions.domains.donuts.config import DonutDistributionConfig
+from embedex.distributions.domains.config import DonutsDataConfig
 from embedex.distributions.domains.donuts.donut import random_donuts, sample_batch
 from embedex.distributions.domains.donuts.evaluate_all import discover_runs, split_run_name
 from embedex.logger import count_params
@@ -113,7 +113,7 @@ def main() -> None:
                 done.add((row['name'], row['n_eval']))
 
     max_n = max(args.n_eval)
-    dist_config = DonutDistributionConfig()
+    dist_config = DonutsDataConfig()
     donut_key, sample_key = jax.random.split(jax.random.key(args.eval_seed), 2)
     donuts = random_donuts(
         args.num_distributions,

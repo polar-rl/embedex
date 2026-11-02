@@ -19,7 +19,7 @@ training:
   num_samples: 128
   seed: 0
 
-experiments:
+evaluation:
   width_analysis: false
   interpolation: false
   linear_functionals: false

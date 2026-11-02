@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.figure import Figure
 
-from embedex.distributions.domains.donuts.config import ExperimentConfig, VisualizationConfig
+from embedex.distributions.domains.config import DonutsEvaluationConfig, DonutsVisualizationConfig
 from embedex.distributions.domains.donuts.donut import Donut, sample_batch
 from embedex.distributions.domains.donuts.plots import (
     FIGURE_WIDTH,
@@ -31,7 +31,7 @@ INTERPOLATION_DONUTS = [
 @apply_latex_style
 def build_interpolation_figure(
     model: FlowEmbedding,
-    config: VisualizationConfig,
+    config: DonutsVisualizationConfig,
     num_steps: int,
     num_samples: int,
     key: jax.Array,
@@ -97,8 +97,8 @@ def build_interpolation_figure(
 
 def run_interpolation(
     model: FlowEmbedding,
-    config: ExperimentConfig,
-    visualization: VisualizationConfig,
+    config: DonutsEvaluationConfig,
+    visualization: DonutsVisualizationConfig,
     save_path: str,
     key: jax.Array,
 ) -> None:

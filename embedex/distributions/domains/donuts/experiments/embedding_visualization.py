@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.decomposition import PCA
 
-from embedex.distributions.domains.donuts.config import DonutDistributionConfig, ExperimentConfig
+from embedex.distributions.domains.config import DonutsDataConfig, DonutsEvaluationConfig
 from embedex.distributions.domains.donuts.donut import random_donuts, sample_batch
 from embedex.distributions.embedding import FlowEmbedding
 from embedex.plotting import save_figure
@@ -14,8 +14,8 @@ from embedex.plotting import save_figure
 
 def run_embedding_visualization(
     model: FlowEmbedding,
-    config: ExperimentConfig,
-    distribution: DonutDistributionConfig,
+    config: DonutsEvaluationConfig,
+    distribution: DonutsDataConfig,
     save_path: str,
     key: jax.Array,
 ) -> None:

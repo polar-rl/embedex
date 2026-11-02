@@ -1,5 +1,3 @@
-"""Config dataclasses for distribution embedding models and training."""
-
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -17,17 +15,6 @@ class EmbeddingConfig:
     pool_type: Literal['mean', 'attention'] = 'mean'
     pool_num_heads: int = 4
     pool_num_queries: int = 1
-    # Node-relational stream (TWO_AXIS): outer-product sample pool -> node-axis edge-biased
-    # attention -> per-node N-dim Jhat row, delivered per node. The node-token width is N (not a
-    # tunable), so there is no d_model knob. num_classes is set from distribution.num_states.
-    #
-    # relational_mode selects which stream is built. 'learned' is the full stream above;
-    # 'raw_agree' and 'raw_edge' are the ablation arms that ask whether the edge-biased
-    # attention earns its keep over the raw pairwise statistic. All three emit out_dim = N^2
-    # and are delivered per variable, so conditioning width is identical across arms.
-    # relational: bool is the deprecated alias the learned stream was configured with before
-    # the arms existed; every fusion3 checkpoint carries it, so it stays readable. Resolve
-    # both through rel_mode rather than reading either field directly.
     relational: bool = False
     relational_mode: Literal['none', 'learned', 'raw_agree', 'raw_edge'] | None = None
     rel_d_e: int = 16
@@ -38,19 +25,11 @@ class EmbeddingConfig:
 
     @property
     def rel_mode(self) -> Literal['none', 'learned', 'raw_agree', 'raw_edge']:
-        """The stream to build, resolving the deprecated `relational` alias.
-
-        A config predating the arms sets only `relational`; a config naming an arm sets only
-        `relational_mode`. Both set and disagreeing is a mistake worth raising on, because
-        `build_dataclass` ignores unknown keys and would otherwise build the wrong model in
-        silence.
-        """
         if self.relational_mode is None:
             return 'learned' if self.relational else 'none'
         if self.relational and self.relational_mode != 'learned':
             raise ValueError(
-                f'relational=True contradicts relational_mode={self.relational_mode!r}; '
-                'set one or the other.'
+                f'`relational=True` contradicts `relational_mode={self.relational_mode!r}`; set one or the other.'
             )
         return self.relational_mode
 
@@ -86,7 +65,7 @@ class GeneratorConfig:
     dfm_attn_num_layers: int = 4
     dfm_attn_ff_multiplier: int = 4
     dfm_attn_num_cond_tokens: int = 0  # 0 = auto-infer from conditioning_dim
-    # Autoregressive (causal transformer)
+    # Autoregressive (Causal Transformer)
     ar_num_classes: int = 2
     ar_token_dim: int = 48
     ar_num_heads: int = 4
@@ -98,8 +77,6 @@ class GeneratorConfig:
 class ModelConfig:
     input_dim: int = 2
     likelihood_dim: int = 0  # per-sample likelihood features handed to embed() beside the samples
-    # variable i -> the likelihood feature column its relational gate reads; None = the shared
-    # column when likelihood_dim is 1, one column per variable when it equals input_dim
     likelihood_index: tuple[int, ...] | None = None
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
     generator: GeneratorConfig = field(default_factory=GeneratorConfig)
@@ -120,4 +97,21 @@ class TrainingConfig:
     log_interval: int = 100
     checkpoint_interval: int = 1000
     # Misc
+    seed: int = 0
+
+
+@dataclass
+class DataConfig:
+    pass
+
+
+@dataclass
+class Config:
+    model: ModelConfig = field(default_factory=ModelConfig)
+    training: TrainingConfig = field(default_factory=TrainingConfig)
+
+    run_name: str = 'baseline'
+    model_dir: str = 'models/distributions'
+    figure_dir: str = 'figures/distributions'
+    model_ckpt: str | None = None
     seed: int = 0

@@ -15,7 +15,7 @@ from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 from matplotlib.ticker import ScalarFormatter
 
-from embedex.distributions.domains.donuts.config import VisualizationConfig
+from embedex.distributions.domains.config import DonutsVisualizationConfig
 from embedex.distributions.domains.donuts.donut import Donut, sample_batch
 from embedex.distributions.embedding import FlowEmbedding
 from embedex.plotting import apply_latex_style, save_figure
@@ -198,7 +198,7 @@ PAPER_DONUTS = [
 @apply_latex_style
 def build_donuts_figure(
     model: FlowEmbedding,
-    config: VisualizationConfig,
+    config: DonutsVisualizationConfig,
     key: jax.Array,
 ) -> Figure:
 
@@ -304,7 +304,7 @@ def build_donuts_figure(
 def generate_paper_plots(
     model: FlowEmbedding,
     save_path: str,
-    config: VisualizationConfig,
+    config: DonutsVisualizationConfig,
     key: jax.Array,
 ) -> None:
     print('Generating donut paper figure...')

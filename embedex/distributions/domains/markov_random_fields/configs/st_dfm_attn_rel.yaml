@@ -32,7 +32,7 @@ training:
   num_samples: 512
   seed: 0
 
-distribution:
+data:
   num_spins: 12
   num_states: 2
   coupling_scale: 1.0
@@ -41,8 +41,8 @@ distribution:
   edge_prob: 0.5
 
 evaluation:
-  num_distributions: 256
-  num_embedding_samples: 256
+  num_eval_distributions: 256
+  num_eval_samples: 256
   num_logprob_evals: 8
 
 run_name: dfm_attn_rel

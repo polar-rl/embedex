@@ -260,8 +260,8 @@ def main() -> None:
         if args.runs is not None and run_name not in args.runs:
             continue
         cfg = read_ckpt_config(str(ckpt_path))
-        fam_id = family_id(cfg['distribution'])
-        family = families.setdefault(fam_id, {'dist': cfg['distribution'], 'runs': []})
+        fam_id = family_id(cfg['data'])
+        family = families.setdefault(fam_id, {'dist': cfg['data'], 'runs': []})
         family['runs'].append((run_name, ckpt_path, cfg))
 
     with open(output, 'a') as f:

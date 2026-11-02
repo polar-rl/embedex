@@ -4,7 +4,7 @@ import jax
 
 from embedex.checkpointing import load_ckpt, save_ckpt
 from embedex.distributions.builder import build_from_config, create_model
-from embedex.distributions.domains.donuts.config import parse_args
+from embedex.distributions.domains.config import DonutsConfig, parse_args
 from embedex.distributions.domains.donuts.donut import random_donuts, sample_batch
 from embedex.distributions.domains.donuts.experiments import (
     run_embedding_visualization,
@@ -21,8 +21,7 @@ from embedex.distributions.utils import plot_loss_curve, plot_norm_curve
 from embedex.logger import count_params
 
 
-def main() -> None:
-    cfg = parse_args()
+def main(cfg: DonutsConfig) -> None:
     key = jax.random.key(cfg.seed)
 
     if cfg.model_ckpt is not None:
@@ -39,9 +38,9 @@ def main() -> None:
             donut_key, sample_key = jax.random.split(key, 2)
             donuts = random_donuts(
                 batch_size,
-                cfg.distribution.mean_std,
-                cfg.distribution.radius_range,
-                cfg.distribution.width_range,
+                cfg.data.mean_std,
+                cfg.data.radius_range,
+                cfg.data.width_range,
                 donut_key,
             )
             return sample_batch(donuts, num_samples, sample_key)
@@ -65,43 +64,41 @@ def main() -> None:
     key, plots_key = jax.random.split(key, 2)
     generate_paper_plots(model, figure_save_dir, cfg.visualization, plots_key)
 
-    if cfg.experiments.width_analysis:
+    if cfg.evaluation.width_analysis:
         print('\nRunning width analysis experiment...')
         key, width_key = jax.random.split(key, 2)
-        run_width_analysis(model, cfg.experiments, cfg.distribution, figure_save_dir, width_key)
+        run_width_analysis(model, cfg.evaluation, cfg.data, figure_save_dir, width_key)
 
-    if cfg.experiments.interpolation:
+    if cfg.evaluation.interpolation:
         print('Running interpolation experiment...')
         key, interp_key = jax.random.split(key, 2)
-        run_interpolation(model, cfg.experiments, cfg.visualization, figure_save_dir, interp_key)
+        run_interpolation(model, cfg.evaluation, cfg.visualization, figure_save_dir, interp_key)
 
-    if cfg.experiments.linear_functionals:
+    if cfg.evaluation.linear_functionals:
         print('Running linear functionals experiment...')
         key, linear_key = jax.random.split(key, 2)
-        run_linear_functionals(model, cfg.experiments, figure_save_dir, linear_key)
+        run_linear_functionals(model, cfg.evaluation, figure_save_dir, linear_key)
 
-    if cfg.experiments.gaussian_ood:
+    if cfg.evaluation.gaussian_ood:
         print('Running Gaussian OOD experiment...')
         key, ood_key = jax.random.split(key, 2)
-        run_gaussian_ood(model, cfg.experiments, figure_save_dir, ood_key)
+        run_gaussian_ood(model, cfg.evaluation, figure_save_dir, ood_key)
 
-    if cfg.experiments.property_directions:
+    if cfg.evaluation.property_directions:
         print('Running property directions experiment...')
         key, prop_key = jax.random.split(key, 2)
-        run_property_directions(model, cfg.experiments, figure_save_dir, prop_key)
+        run_property_directions(model, cfg.evaluation, figure_save_dir, prop_key)
 
-    if cfg.experiments.embedding_visualization:
+    if cfg.evaluation.embedding_visualization:
         print('Running embedding visualization experiment...')
         key, viz_key = jax.random.split(key, 2)
-        run_embedding_visualization(
-            model, cfg.experiments, cfg.distribution, figure_save_dir, viz_key
-        )
+        run_embedding_visualization(model, cfg.evaluation, cfg.data, figure_save_dir, viz_key)
 
-    if cfg.experiments.parallelogram:
+    if cfg.evaluation.parallelogram:
         print('\nRunning parallelogram experiment...')
         key, comp_key = jax.random.split(key, 2)
-        run_parallelogram(model, cfg.experiments, cfg.visualization, figure_save_dir, comp_key)
+        run_parallelogram(model, cfg.evaluation, cfg.visualization, figure_save_dir, comp_key)
 
 
 if __name__ == '__main__':
-    main()
+    main(parse_args(DonutsConfig))

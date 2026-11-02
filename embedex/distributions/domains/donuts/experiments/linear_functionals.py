@@ -4,7 +4,7 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
-from embedex.distributions.domains.donuts.config import ExperimentConfig
+from embedex.distributions.domains.config import DonutsEvaluationConfig
 from embedex.distributions.domains.donuts.donut import Donut, sample_batch
 from embedex.distributions.embedding import FlowEmbedding
 from embedex.distributions.utils import plot_model_density
@@ -13,7 +13,7 @@ from embedex.plotting import save_figure
 
 def run_linear_functionals(
     model: FlowEmbedding,
-    config: ExperimentConfig,
+    config: DonutsEvaluationConfig,
     save_path: str,
     key: jax.Array,
 ) -> None:

@@ -9,8 +9,8 @@ import numpy as np
 
 from embedex.checkpointing import load_ckpt
 from embedex.distributions.builder import build_from_config
+from embedex.distributions.domains.config import DonutsDataConfig
 from embedex.distributions.domains.donuts.baselines import KDEBaseline, OracleDonutFit
-from embedex.distributions.domains.donuts.config import DonutDistributionConfig
 from embedex.distributions.domains.donuts.donut import donut_moments, random_donuts, sample_batch
 from embedex.distributions.domains.experiment_utils import discover_runs, eval_key, split_run_name
 from embedex.distributions.metrics import sliced_wasserstein_distance
@@ -172,7 +172,7 @@ def main() -> None:
 
     max_n = max(args.n_eval)
     total = max_n + args.num_logprob_samples + args.num_generated_samples
-    dist_config = DonutDistributionConfig()
+    dist_config = DonutsDataConfig()
 
     donut_key, sample_key = jax.random.split(jax.random.key(args.eval_seed), 2)
     donuts = random_donuts(

@@ -9,6 +9,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.figure import Figure
 
+from embedex.distributions.domains.config import (
+    MRFDataConfig,
+    MRFVisualizationConfig,
+)
 from embedex.distributions.domains.experiment_utils import (
     apply_plot_style,
     load_rows,
@@ -22,10 +26,6 @@ from embedex.distributions.domains.markov_random_fields.aggregate import (
     MODEL_CELLS,
     base_cell,
 )
-from embedex.distributions.domains.markov_random_fields.config import (
-    MRFDistributionConfig,
-    VisualizationConfig,
-)
 from embedex.distributions.domains.markov_random_fields.mrf import MRF
 from embedex.distributions.domains.markov_random_fields.pmfs import empirical_pmf
 from embedex.distributions.embedding import FlowEmbedding
@@ -35,7 +35,7 @@ from embedex.plotting import save_figure
 SERIES = [*MODEL_CELLS, FLOOR]
 
 
-def _random_mrf(distribution: MRFDistributionConfig, key: jax.Array) -> MRF:
+def _random_mrf(distribution: MRFDataConfig, key: jax.Array) -> MRF:
     return MRF.random(
         num_spins=distribution.num_spins,
         num_states=distribution.num_states,
@@ -223,8 +223,8 @@ def create_samples_figure(gen: np.ndarray, num_states: int, num_show: int) -> Fi
 
 def create_reconstruction_grid(
     model: FlowEmbedding,
-    distribution: MRFDistributionConfig,
-    config: VisualizationConfig,
+    distribution: MRFDataConfig,
+    config: MRFVisualizationConfig,
     key: jax.Array,
 ) -> Figure:
     num_plots = config.grid_num_distributions
@@ -268,8 +268,8 @@ def create_reconstruction_grid(
 def generate_paper_plots(
     model: FlowEmbedding,
     save_path: str,
-    config: VisualizationConfig,
-    distribution: MRFDistributionConfig,
+    config: MRFVisualizationConfig,
+    distribution: MRFDataConfig,
     key: jax.Array,
 ) -> None:
     single_key, grid_key = jax.random.split(key, 2)

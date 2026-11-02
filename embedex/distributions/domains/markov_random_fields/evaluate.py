@@ -4,9 +4,9 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 
-from embedex.distributions.domains.markov_random_fields.config import (
-    EvaluationConfig,
-    MRFDistributionConfig,
+from embedex.distributions.domains.config import (
+    MRFDataConfig,
+    MRFEvaluationConfig,
 )
 from embedex.distributions.domains.markov_random_fields.mrf import (
     MRF,
@@ -83,13 +83,13 @@ def compute_metrics(
 
 def evaluate(
     model: FlowEmbedding,
-    config: EvaluationConfig,
-    distribution: MRFDistributionConfig,
+    config: MRFEvaluationConfig,
+    distribution: MRFDataConfig,
     key: jax.Array,
 ) -> EvaluationMetrics:
     key, mrf_key, sample_key, eval_key = jax.random.split(key, 4)
     mrfs = random_mrfs(
-        config.num_distributions,
+        config.num_eval_distributions,
         distribution.num_spins,
         distribution.num_states,
         distribution.coupling_scale,
@@ -100,7 +100,7 @@ def evaluate(
         edge_prob_min=distribution.edge_prob_min,
         edge_prob_max=distribution.edge_prob_max,
     )
-    data = sample_batch(mrfs, config.num_embedding_samples, sample_key)
+    data = sample_batch(mrfs, config.num_eval_samples, sample_key)
     states = all_states(distribution.num_spins, distribution.num_states)
 
     metrics = compute_metrics(
@@ -108,7 +108,7 @@ def evaluate(
         mrfs,
         data,
         states,
-        config.num_embedding_samples,
+        config.num_eval_samples,
         config.num_logprob_evals,
         eval_key,
     )

@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
+from embedex.distributions.domains.config import MRFDataConfig
 from embedex.distributions.domains.experiment_utils import (
     cell_mean_se,
     latex_table,
@@ -12,7 +13,6 @@ from embedex.distributions.domains.experiment_utils import (
     paired_bootstrap,
     seed_averaged_per_dist,
 )
-from embedex.distributions.domains.markov_random_fields.config import MRFDistributionConfig
 
 METRICS = ['jsd', 'class_mae', 'agree_mae', 'mass_outside', 'mode_coverage']
 MODEL_CELLS = ['st_nf_dequant', 'st_dfm_attn', 'st_dfm']
@@ -68,7 +68,7 @@ def family_dists(rows: list[dict]) -> dict[str, dict]:
 
 
 def is_default_family(dist: dict) -> bool:
-    return dist == asdict(MRFDistributionConfig())
+    return dist == asdict(MRFDataConfig())
 
 
 def base_cell(cell: str) -> str | None:
