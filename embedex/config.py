@@ -1,40 +1,62 @@
 import argparse
 import ast
 import copy
-import os
-import sys
 import types
-from dataclasses import fields
+import warnings
+from dataclasses import fields, is_dataclass
 from typing import Any
 
 import yaml
 
 
-def load_config[T](cfg_cls: type[T], save_path: str) -> T:
-    """Load a YAML file into an instance of `cfg_cls`.
+def load_config[T](cfg_cls: type[T], path: str) -> T:
+    """Load a YAML file into an instance of `cfg_cls`, rejecting keys it has no field for."""
 
-    A relative `save_path` attribute, if present, is resolved against the config file's directory.
-    """
-
-    with open(save_path) as f:
+    with open(path) as f:
         data = yaml.safe_load(f) or {}
 
-    config = build_dataclass(cfg_cls, data)
+    if unknown := _unknown_keys(cfg_cls, data):
+        raise ValueError(f'{path}: {cfg_cls.__name__} has no fields {", ".join(unknown)}')
 
-    if hasattr(config, 'save_path') and not os.path.isabs(config.save_path):
-        config.save_path = os.path.normpath(
-            os.path.join(os.path.dirname(os.path.abspath(save_path)), config.save_path)
-        )
-
-    return config
+    return _build_dataclass(cfg_cls, data)
 
 
 def build_dataclass[T](cls: type[T], data: dict[str, Any]) -> T:
-    """Construct `cls` from `data`, recursing into nested dataclass fields.
+    """Construct `cls` from a saved config, recursing into nested dataclass fields.
 
-    Unknown keys are ignored; scalar values are coerced to the field's annotated type where possible.
+    Saved configs, such as checkpoint headers, keep fields that newer code may have renamed or
+    removed, so keys that `cls` has no field for are skipped with a warning rather than rejected.
+    Scalar values are coerced to the field's annotated type where possible.
     """
 
+    if unknown := _unknown_keys(cls, data):
+        warnings.warn(
+            f'{cls.__name__} has no fields {", ".join(unknown)}; ignoring them', stacklevel=2
+        )
+
+    return _build_dataclass(cls, data)
+
+
+def _unknown_keys(cls: type, data: dict[str, Any]) -> list[str]:
+    """Report the keys in `data` that are not fields of `cls`, as dotted paths.
+
+    Nested dictionaries are checked against the dataclass of their field, so a misspelled
+    `{'training': {'lr': 0.1}}` is reported as `training.lr`.
+    """
+
+    annotations = {f.name: f.type for f in fields(cls)}
+    unknown = []
+
+    for key, value in data.items():
+        if key not in annotations:
+            unknown.append(key)
+        elif isinstance(value, dict) and _is_dataclass_type(annotations[key]):
+            unknown += [f'{key}.{path}' for path in _unknown_keys(annotations[key], value)]
+
+    return unknown
+
+
+def _build_dataclass[T](cls: type[T], data: dict[str, Any]) -> T:
     def _type_allows_none(anno):
         """Check if a type annotation includes None (e.g. `str | None`)."""
 
@@ -52,18 +74,18 @@ def build_dataclass[T](cls: type[T], data: dict[str, Any]) -> T:
 
         if (value is None or value == 'None') and _type_allows_none(anno):
             kwargs[key] = None
-        elif (
-            isinstance(value, dict)
-            and isinstance(anno, type)
-            and hasattr(anno, '__dataclass_fields__')
-        ):
-            kwargs[key] = build_dataclass(anno, value)
+        elif isinstance(value, dict) and _is_dataclass_type(anno):
+            kwargs[key] = _build_dataclass(anno, value)
         elif anno in (int, float, str, bool) and not isinstance(value, anno):
             kwargs[key] = anno(value)
         else:
             kwargs[key] = value
 
     return cls(**kwargs)
+
+
+def _is_dataclass_type(anno: Any) -> bool:
+    return isinstance(anno, type) and hasattr(anno, '__dataclass_fields__')
 
 
 def apply_overrides[T](config: T, overrides: list[str]) -> T:
@@ -75,15 +97,20 @@ def apply_overrides[T](config: T, overrides: list[str]) -> T:
     config = copy.deepcopy(config)
     for override in overrides:
         if '=' not in override:
-            print(f'Warning: ignoring malformed override: {override}', file=sys.stderr)
+            warnings.warn(
+                f'Ignoring malformed override {override!r}; expected key.path=value', stacklevel=2
+            )
             continue
 
         key_path, value_str = override.split('=', 1)
         parts = key_path.split('.')
 
         obj = config
-        for part in parts[:-1]:
-            obj = getattr(obj, part)
+        for i, part in enumerate(parts):
+            if not is_dataclass(obj) or part not in {f.name for f in fields(obj)}:
+                raise ValueError(f'{type(config).__name__} has no field {".".join(parts[: i + 1])}')
+            if i < len(parts) - 1:
+                obj = getattr(obj, part)
 
         field_name = parts[-1]
         current = getattr(obj, field_name)

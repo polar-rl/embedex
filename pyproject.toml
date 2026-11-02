@@ -49,6 +49,8 @@ testpaths = ['tests']
 addopts = ['--import-mode=importlib']
 markers = ["slow: end-to-end runs of a whole training pipeline (deselect with -m 'not slow')"]
 filterwarnings = [
+    # A saved config with keys its class lacks means a config field was renamed or removed.
+    'error:.*has no fields:UserWarning',
     # `tensorflow_probability` still touches deprecated JAX internals.
     'ignore:jax.core.pytype_aval_mappings is deprecated:DeprecationWarning',
     # The experiment tracker's swagger dependencies use a deprecated `jsonschema` API.

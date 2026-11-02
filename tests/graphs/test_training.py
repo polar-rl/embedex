@@ -15,7 +15,6 @@ from embedex.graphs.builder import (
     create_medians_network,
     create_transition_network,
 )
-from embedex.graphs.config import Config
 from embedex.graphs.embedding import GraphEmbedding
 from embedex.graphs.families.random_trees import RandomTreesGenerator
 from embedex.graphs.training import (
@@ -201,7 +200,7 @@ def test_family_trains_end_to_end(family, make_config, tmp_path, monkeypatch, ke
         str(run_dir / f'{cfg.training.num_iterations}.eqx'),
         lambda saved: (
             build_from_config(saved, key),
-            family.create_reconstructor(build_dataclass(Config, saved), key),
+            family.create_reconstructor(build_dataclass(family.config_cls, saved), key),
         ),
     )
     assert isinstance(embedding, GraphEmbedding)

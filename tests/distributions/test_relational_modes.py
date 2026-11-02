@@ -94,7 +94,7 @@ def test_deprecated_alias_resolves_to_learned():
 
 
 def test_contradicting_the_alias_raises():
-    # build_dataclass ignores unknown keys, so a config setting both fields would otherwise
-    # build the wrong model in silence.
+    # Otherwise a config setting both fields would ignore one of them and build the wrong model
+    # in silence.
     with pytest.raises(ValueError, match='contradicts'):
         _ = EmbeddingConfig(relational=True, relational_mode='raw_agree').rel_mode

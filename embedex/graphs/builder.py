@@ -6,7 +6,7 @@ from embedex.base_embedding_blocks import PointwiseBlock as BasePointwiseBlock
 from embedex.base_embedding_blocks import SetTransformerBlock as BaseSetTransformerBlock
 from embedex.config import build_dataclass
 from embedex.graphs.allo import ConditionedBetas, ConditionedEigenfunctions
-from embedex.graphs.config import Config, EmbeddingConfig
+from embedex.graphs.config import Config, EmbeddingConfig, ModelConfig
 from embedex.graphs.embedding import GraphEmbedding, PointwiseBlock, SetTransformerBlock
 from embedex.graphs.reconstructor import MediansNetwork, TransitionNetwork
 
@@ -44,7 +44,7 @@ def create_embedding_network(cfg: Config, key: jax.Array) -> GraphEmbedding:
 
 
 def build_from_config(cfg: dict, key: jax.Array) -> GraphEmbedding:
-    return create_embedding_network(build_dataclass(Config, cfg), key)
+    return create_embedding_network(Config(model=build_dataclass(ModelConfig, cfg['model'])), key)
 
 
 def create_embedding_blocks(

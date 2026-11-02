@@ -15,7 +15,6 @@ from embedex.functions.builder import (
     create_embedding_network,
     create_operator_network,
 )
-from embedex.functions.config import Config
 from embedex.functions.embedding import FunctionEmbedding
 from embedex.functions.families.logistic import LogisticGenerator
 from embedex.functions.operator import OperatorMapping
@@ -239,7 +238,7 @@ def test_family_trains_end_to_end(family, make_config, tmp_path, monkeypatch, ke
 
     # The checkpoint rebuilds from its own saved config, as the paper figure scripts do.
     def build(saved: dict):
-        saved_cfg = build_dataclass(Config, saved)
+        saved_cfg = build_dataclass(family.config_cls, saved)
         return (
             build_from_config(saved, key),
             create_operator_network(saved_cfg, family.generator(), key),

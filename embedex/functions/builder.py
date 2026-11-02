@@ -14,6 +14,7 @@ from embedex.functions.config import (
     EvaluatorConfig,
     ModelConfig,
     OperatorConfig,
+    TrainingConfig,
 )
 from embedex.functions.embedding import (
     DotProductBlock,
@@ -42,7 +43,10 @@ def create_embedding_network(cfg: Config, key: jax.Array) -> FunctionEmbedding:
 
 
 def build_from_config(cfg: dict, key: jax.Array) -> FunctionEmbedding:
-    return create_embedding_network(build_dataclass(Config, cfg), key)
+    model = build_dataclass(ModelConfig, cfg['model'])
+    training = build_dataclass(TrainingConfig, cfg['training'])
+
+    return create_embedding_network(Config(model=model, training=training), key)
 
 
 def create_embedding_blocks(
