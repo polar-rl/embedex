@@ -1,0 +1,23 @@
+# Runs one test suite. Called by the per-object workflows, which decide when it runs.
+name: Tests
+
+on:
+  workflow_call:
+    inputs:
+      path:
+        description: Test files or directories to run, relative to the repo root
+        required: true
+        type: string
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: '3.13'
+          enable-cache: true
+      - run: uv sync --locked --extra dev
+      - run: uv run pytest ${{ inputs.path }}

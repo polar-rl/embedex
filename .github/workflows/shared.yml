@@ -1,0 +1,31 @@
+name: Shared code
+
+on:
+  push:
+    paths:
+      - 'embedex/*.py'
+      - 'tests/*.py'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/tests.yml'
+      - '.github/workflows/shared.yml'
+  pull_request:
+    paths:
+      - 'embedex/*.py'
+      - 'tests/*.py'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/tests.yml'
+      - '.github/workflows/shared.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    uses: ./.github/workflows/tests.yml
+    with:
+      # The tests of the shared modules themselves; each object's suite runs in its own workflow.
+      path: tests/test_config.py

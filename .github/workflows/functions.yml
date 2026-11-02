@@ -1,0 +1,36 @@
+name: Functions
+
+on:
+  push:
+    paths:
+      - 'embedex/functions/**'
+      - 'tests/functions/**'
+      # Code and settings shared by every object
+      - 'embedex/*.py'
+      - 'tests/conftest.py'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/tests.yml'
+      - '.github/workflows/functions.yml'
+  pull_request:
+    paths:
+      - 'embedex/functions/**'
+      - 'tests/functions/**'
+      # Code and settings shared by every object
+      - 'embedex/*.py'
+      - 'tests/conftest.py'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/tests.yml'
+      - '.github/workflows/functions.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    uses: ./.github/workflows/tests.yml
+    with:
+      path: tests/functions

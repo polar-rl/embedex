@@ -1,0 +1,36 @@
+name: Graphs
+
+on:
+  push:
+    paths:
+      - 'embedex/graphs/**'
+      - 'tests/graphs/**'
+      # Code and settings shared by every object
+      - 'embedex/*.py'
+      - 'tests/conftest.py'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/tests.yml'
+      - '.github/workflows/graphs.yml'
+  pull_request:
+    paths:
+      - 'embedex/graphs/**'
+      - 'tests/graphs/**'
+      # Code and settings shared by every object
+      - 'embedex/*.py'
+      - 'tests/conftest.py'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/tests.yml'
+      - '.github/workflows/graphs.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    uses: ./.github/workflows/tests.yml
+    with:
+      path: tests/graphs
