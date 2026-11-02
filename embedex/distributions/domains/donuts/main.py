@@ -7,11 +7,11 @@ from embedex.distributions.builder import build_from_config, create_model
 from embedex.distributions.domains.donuts.config import parse_args
 from embedex.distributions.domains.donuts.donut import random_donuts, sample_batch
 from embedex.distributions.domains.donuts.experiments import (
-    run_compositional,
     run_embedding_visualization,
     run_gaussian_ood,
     run_interpolation,
     run_linear_functionals,
+    run_parallelogram,
     run_property_directions,
     run_width_analysis,
 )
@@ -73,7 +73,7 @@ def main() -> None:
     if cfg.experiments.interpolation:
         print('Running interpolation experiment...')
         key, interp_key = jax.random.split(key, 2)
-        run_interpolation(model, cfg.experiments, figure_save_dir, interp_key)
+        run_interpolation(model, cfg.experiments, cfg.visualization, figure_save_dir, interp_key)
 
     if cfg.experiments.linear_functionals:
         print('Running linear functionals experiment...')
@@ -97,10 +97,10 @@ def main() -> None:
             model, cfg.experiments, cfg.distribution, figure_save_dir, viz_key
         )
 
-    if cfg.experiments.compositional:
-        print('\nRunning compositional disentanglement experiment...')
+    if cfg.experiments.parallelogram:
+        print('\nRunning parallelogram experiment...')
         key, comp_key = jax.random.split(key, 2)
-        run_compositional(model, cfg.experiments, figure_save_dir, comp_key)
+        run_parallelogram(model, cfg.experiments, cfg.visualization, figure_save_dir, comp_key)
 
 
 if __name__ == '__main__':

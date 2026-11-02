@@ -27,7 +27,7 @@ class ExperimentConfig:
     width_analysis_num_samples: int = 512
 
     interpolation: bool = True
-    interpolation_num_steps: int = 5
+    interpolation_num_steps: int = 6
     interpolation_num_samples: int = 512
 
     linear_functionals: bool = True
@@ -45,8 +45,8 @@ class ExperimentConfig:
     embedding_visualization_num_distributions: int = 512
     embedding_visualization_num_samples: int = 256
 
-    compositional: bool = True
-    compositional_num_samples: int = 512
+    parallelogram: bool = True
+    parallelogram_num_samples: int = 512
 
 
 @dataclass

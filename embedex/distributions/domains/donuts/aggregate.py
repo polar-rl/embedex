@@ -5,16 +5,25 @@ from pathlib import Path
 
 import numpy as np
 
-from embedex.distributions.domains.donuts.report_utils import CELL_DISPLAY, mean_se
 from embedex.distributions.domains.experiment_utils import (
     cell_mean_se,
     load_rows,
+    mean_se,
     paired_bootstrap,
     safe_nanmean,
     seed_averaged_per_dist,
 )
 
 METRICS = ['nll', 'swd', 'center_error', 'radius_error', 'width_error']
+
+CELL_DISPLAY = {
+    'pointwise_fm': 'Pointwise (FM)',
+    'pointwise_nf': 'Pointwise (NF)',
+    'set_transformer_fm': 'Set Transformer (FM)',
+    'set_transformer_nf': 'Set Transformer (NF)',
+    'kde': 'KDE',
+    'oracle': 'Oracle',
+}
 
 BASELINES = ['kde', 'oracle']
 METRIC_LABEL = {

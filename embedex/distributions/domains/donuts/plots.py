@@ -6,18 +6,21 @@ from collections import defaultdict
 from pathlib import Path
 
 import jax
+import jax.numpy as jnp
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import Colormap, LinearSegmentedColormap
 from matplotlib.figure import Figure
+from matplotlib.lines import Line2D
 from matplotlib.ticker import ScalarFormatter
-from numpy.typing import NDArray
 
 from embedex.distributions.domains.donuts.config import VisualizationConfig
-from embedex.distributions.domains.donuts.donut import PAPER_DONUTS, Donut, sample_batch
+from embedex.distributions.domains.donuts.donut import Donut, sample_batch
 from embedex.distributions.embedding import FlowEmbedding
-from embedex.plotting import save_figure
+from embedex.plotting import apply_latex_style, save_figure
+
+FIGURE_WIDTH = 9.5
 
 METRICS = ['nll', 'swd', 'center_error', 'radius_error', 'width_error']
 BASELINES = ['kde', 'oracle']
@@ -121,82 +124,181 @@ def plot_metric(curves: dict, metric: str, figure_dir: Path, fmt: str) -> Path:
     return out
 
 
-def create_gradient_cmap(color: str | tuple[float, float, float]) -> Colormap:
+def view_box(points: np.ndarray, pad: float = 0.06) -> tuple[tuple, tuple]:
+    """Padded (xlims, ylims) covering every point, shared across a figure's panels."""
+
+    (x0, y0), (x1, y1) = points.min(0), points.max(0)
+    px, py = pad * (x1 - x0), pad * (y1 - y0)
+
+    return (x0 - px, x1 + px), (y0 - py, y1 + py)
+
+
+def create_gradient_cmap(
+    color: str | tuple[float, float, float], max_alpha: float = 1.0
+) -> Colormap:
     if isinstance(color, str):
         color = mpl.colors.to_rgb(color)
 
     cmap_name = f'gradient_from_{color}'
-    colors = [(1.0, 1.0, 1.0, 0.0), (*color, 1.0)]
+    colors = [(1.0, 1.0, 1.0, 0.0), (*color, max_alpha)]
 
     return LinearSegmentedColormap.from_list(cmap_name, colors)
 
 
-def create_donut_samples_plot(
-    donuts: list[Donut],
-    num_samples: int,
-    scatter_size: float,
-    key: jax.Array,
-) -> tuple[Figure, plt.Axes]:
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
+def density_on_grid(
+    model: FlowEmbedding,
+    embedding: jax.Array,
+    xx: np.ndarray,
+    yy: np.ndarray,
+    threshold: float,
+) -> np.ndarray:
+    """Learned density on a meshgrid, floored to zero below `threshold`."""
 
-    data = sample_batch(donuts, num_samples, key)
+    grid = np.stack([xx.ravel(), yy.ravel()], axis=-1)
+    log_probs, _, _ = model.log_prob(grid, embedding)
+    density = np.exp(np.asarray(log_probs)).reshape(xx.shape)
 
-    for i in range(len(donuts)):
-        ax.scatter(data[i, :, 0], data[i, :, 1], s=scatter_size, marker='.')
+    return np.where(density >= threshold, density, 0.0)
 
-    ax.set_xlabel(r'$x_1$')
-    ax.set_ylabel(r'$x_2$')
-    ax.grid(False)
+
+def style_panel(
+    ax: plt.Axes,
+    xlims: tuple,
+    ylims: tuple,
+    title: str,
+    xlabel: bool = True,
+    ylabel: bool = True,
+    label_size: float = 10.0,
+    tick_size: float | None = None,
+) -> None:
+    ax.set_title(title, fontsize=8.4)
+    ax.set_xlim(*xlims)
+    ax.set_ylim(*ylims)
+    ax.set_aspect('equal')
+
+    if xlabel:
+        ax.set_xlabel(r'$x_1$', fontsize=label_size)
+    if ylabel:
+        ax.set_ylabel(r'$x_2$', fontsize=label_size)
+    if tick_size is not None:
+        ax.tick_params(labelsize=tick_size)
+
+    ax.grid(True, alpha=0.3)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
-    return fig, ax
+
+PAPER_DONUTS = [
+    Donut(mean=jnp.array([-2.7, 0.5]), radius=jnp.float32(2.0), width=jnp.float32(0.45)),
+    Donut(mean=jnp.array([0.25, 1.2]), radius=jnp.float32(1.4), width=jnp.float32(0.15)),
+    Donut(mean=jnp.array([0.0, -0.5]), radius=jnp.float32(1.6), width=jnp.float32(0.3)),
+]
 
 
-def create_density_contours_plot(
+@apply_latex_style
+def build_donuts_figure(
     model: FlowEmbedding,
-    samples: NDArray[np.floating],
-    xlims: tuple[float, float],
-    ylims: tuple[float, float],
     config: VisualizationConfig,
-) -> tuple[Figure, plt.Axes]:
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
+    key: jax.Array,
+) -> Figure:
 
-    x = np.linspace(*xlims, config.grid_size)
-    y = np.linspace(*ylims, config.grid_size)
-    xx, yy = np.meshgrid(x, y)
-    grid = np.stack([xx.ravel(), yy.ravel()], axis=-1)
-
+    n_cond, n_gen = 32, 512
     color_cycler = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
-    for sample_set, color in zip(samples, color_cycler, strict=False):
-        embedding, _ = model.embed(sample_set)
-        log_probs, _, _ = model.log_prob(grid, embedding)
+    cond_key, gen_key = jax.random.split(key, 2)
+    cond_all = np.asarray(sample_batch(PAPER_DONUTS, n_cond, cond_key))
+    gen_keys = jax.random.split(gen_key, len(PAPER_DONUTS))
 
-        density = np.exp(np.array(log_probs))
-        density = np.where(density >= config.density_threshold, density, 0)
-        density = density.reshape(config.grid_size, config.grid_size)
+    # Embed each donut's conditioning set, then generate a fresh sample cloud from that embedding.
+    embeddings, generated = [], []
+    for cond, gk in zip(cond_all, gen_keys, strict=True):
+        z, _ = model.embed(jnp.asarray(cond))
+        gen = np.asarray(model.generate(z, n_gen, key=gk))
+        embeddings.append(z)
+        generated.append(gen[np.all(np.isfinite(gen), axis=1)])
 
-        cmap = create_gradient_cmap(color)
+    # Common, slightly padded view box covering every plotted point.
+    xlims, ylims = view_box(np.concatenate([*cond_all, *generated]))
 
-        ax.contourf(xx, yy, density, levels=config.num_contour_levels, cmap=cmap, norm='log')
-        ax.scatter(
-            sample_set[:, 0],
-            sample_set[:, 1],
+    gx = np.linspace(*xlims, config.grid_size)
+    gy = np.linspace(*ylims, config.grid_size)
+    xx, yy = np.meshgrid(gx, gy)
+
+    fig, (ax_g, ax_d) = plt.subplots(1, 2, figsize=(FIGURE_WIDTH, 4.7))
+
+    for i, (cond, z, gen) in enumerate(zip(cond_all, embeddings, generated, strict=True)):
+        color = color_cycler[i % len(color_cycler)]
+
+        # The generated cloud, then the conditioning samples on top.
+        ax_g.scatter(
+            gen[:, 0],
+            gen[:, 1],
             s=config.scatter_size,
             color=color,
+            alpha=0.65,
             marker='.',
+            linewidths=0,
+        )
+        ax_g.scatter(
+            cond[:, 0],
+            cond[:, 1],
+            s=28,
+            color=color,
+            marker='X',
+            edgecolor='black',
+            linewidth=0.2,
+            zorder=6,
         )
 
-    ax.set_xlabel(r'$x_1$')
-    ax.set_ylabel(r'$x_2$')
-    ax.grid(False)
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
+        # Learned density from the same embedding, with the conditioning samples overlaid.
+        density = density_on_grid(model, z, xx, yy, config.density_threshold)
+        ax_d.contourf(
+            xx,
+            yy,
+            density,
+            levels=max(config.num_contour_levels, 20),
+            cmap=create_gradient_cmap(color, max_alpha=0.8),
+            norm='log',
+        )
+        ax_d.scatter(
+            cond[:, 0],
+            cond[:, 1],
+            s=28,
+            color=color,
+            marker='X',
+            edgecolor='black',
+            linewidth=0.2,
+            zorder=6,
+        )
 
-    return fig, ax
+    for ax, title in ((ax_g, '(a) Generated samples'), (ax_d, '(b) Learned densities')):
+        style_panel(ax, xlims, ylims, title)
+
+    handles = [
+        Line2D(
+            [],
+            [],
+            marker='X',
+            color='C0',
+            markeredgecolor='black',
+            markeredgewidth=0.2,
+            linestyle='None',
+            markersize=5,
+            label='Conditioning',
+        ),
+        Line2D([], [], marker='o', color='C0', linestyle='None', markersize=4, label='Generated'),
+    ]
+    ax_g.legend(
+        handles=handles,
+        loc='upper left',
+        fontsize='xx-small',
+        framealpha=0.9,
+        borderpad=0.4,
+        labelspacing=0.5,
+        handletextpad=0.4,
+    )
+
+    return fig
 
 
 def generate_paper_plots(
@@ -205,18 +307,9 @@ def generate_paper_plots(
     config: VisualizationConfig,
     key: jax.Array,
 ) -> None:
-    sample_key, density_key = jax.random.split(key, 2)
-
-    print('Generating example donuts...')
-    fig, ax = create_donut_samples_plot(PAPER_DONUTS, 768, config.scatter_size, sample_key)
-    xlims = ax.get_xlim()
-    ylims = ax.get_ylim()
-    save_figure(fig, os.path.join(save_path, 'donuts_example.pdf'))
-
-    print('Generating density plots...')
-    true_samples = sample_batch(PAPER_DONUTS, 256, density_key)
-    fig, _ = create_density_contours_plot(model, true_samples, xlims, ylims, config)
-    save_figure(fig, os.path.join(save_path, 'donuts_densities.pdf'))
+    print('Generating donut paper figure...')
+    fig = build_donuts_figure(model, config, key)
+    save_figure(fig, os.path.join(save_path, 'donuts_paper.pdf'))
 
 
 def main() -> None:

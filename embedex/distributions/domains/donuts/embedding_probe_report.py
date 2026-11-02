@@ -8,7 +8,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import ScalarFormatter
 
-from embedex.distributions.domains.donuts.report_utils import CELL_DISPLAY, mean_se
+from embedex.distributions.domains.donuts.aggregate import CELL_DISPLAY
+from embedex.distributions.domains.experiment_utils import mean_se
 from embedex.plotting import save_figure
 
 TARGETS = ['center_x', 'center_y', 'radius', 'width']

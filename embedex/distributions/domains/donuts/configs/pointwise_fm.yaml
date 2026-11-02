@@ -28,7 +28,7 @@ experiments:
   gaussian_ood: false
   property_directions: false
   embedding_visualization: false
-  compositional: false
+  parallelogram: false
 
 run_name: pointwise_fm
 seed: 0

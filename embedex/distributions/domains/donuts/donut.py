@@ -3,14 +3,6 @@ import jax
 import jax.numpy as jnp
 
 
-def donut_moments(samples: jax.Array) -> tuple[jax.Array, jax.Array, jax.Array]:
-    center = jnp.mean(samples, axis=0)
-    dists = jnp.linalg.norm(samples - center, axis=-1)
-    radius = jnp.mean(dists)
-    width = jnp.sqrt(12.0) * jnp.std(dists) / (radius + 1e-8)
-    return center, radius, width
-
-
 class Donut(eqx.Module):
     mean: jax.Array
     radius: jax.Array
@@ -79,8 +71,10 @@ def sample_batch(
     )
 
 
-PAPER_DONUTS = [
-    Donut(mean=jnp.array([-2.7, 0.5]), radius=jnp.float32(2.0), width=jnp.float32(0.45)),
-    Donut(mean=jnp.array([0.25, 1.2]), radius=jnp.float32(1.4), width=jnp.float32(0.15)),
-    Donut(mean=jnp.array([0.0, -0.5]), radius=jnp.float32(1.6), width=jnp.float32(0.3)),
-]
+def donut_moments(samples: jax.Array) -> tuple[jax.Array, jax.Array, jax.Array]:
+    center = jnp.mean(samples, axis=0)
+    dists = jnp.linalg.norm(samples - center, axis=-1)
+    radius = jnp.mean(dists)
+    width = jnp.sqrt(12.0) * jnp.std(dists) / (radius + 1e-8)
+
+    return center, radius, width

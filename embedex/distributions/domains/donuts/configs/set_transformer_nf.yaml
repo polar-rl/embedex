@@ -27,7 +27,7 @@ experiments:
   gaussian_ood: false
   property_directions: false
   embedding_visualization: false
-  compositional: false
+  parallelogram: false
 
 run_name: set_transformer_nf
 seed: 0
