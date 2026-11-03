@@ -63,13 +63,6 @@ class MRFDataConfig(DataConfig):
 
 
 @dataclass
-class MRFEvaluationConfig:
-    num_eval_distributions: int = 256
-    num_eval_samples: int = 128
-    num_logprob_evals: int = 8
-
-
-@dataclass
 class MRFVisualizationConfig:
     num_embedding_samples: int = 128
     num_generated_samples: int = 1024
@@ -90,7 +83,6 @@ class DonutsConfig(Config):
 @dataclass
 class MRFConfig(Config):
     data: MRFDataConfig = field(default_factory=MRFDataConfig)
-    evaluation: MRFEvaluationConfig = field(default_factory=MRFEvaluationConfig)
     visualization: MRFVisualizationConfig = field(default_factory=MRFVisualizationConfig)
 
     model_dir: str = 'models/distributions/markov_random_fields'

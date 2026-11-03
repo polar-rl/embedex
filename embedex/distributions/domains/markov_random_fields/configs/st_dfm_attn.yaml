@@ -36,10 +36,5 @@ data:
   graph_type: random_edge_fixed_prob
   edge_prob: 0.5
 
-evaluation:
-  num_eval_distributions: 256
-  num_eval_samples: 256
-  num_logprob_evals: 8
-
 run_name: dfm_attn
 seed: 0

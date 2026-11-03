@@ -133,7 +133,6 @@ DOMAINS = (
             'mrf_reconstruction_grid.pdf',
         ),
         data={'num_spins': 4, 'num_states': 2},
-        evaluation={'num_eval_distributions': 4, 'num_eval_samples': 16, 'num_logprob_evals': 2},
         visualization={
             'num_embedding_samples': 16,
             'num_generated_samples': 32,
