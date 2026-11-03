@@ -3,6 +3,8 @@ name = 'embedex'
 version = '0.0.1'
 description = 'Learnable embeddings of higher-order objects, such as distributions and functions.'
 readme = 'README.md'
+license = 'MIT'
+license-files = ['LICENSE.md']
 requires-python = '>=3.13,<3.14'
 dependencies = [
     'diffrax>=0.7.2',
