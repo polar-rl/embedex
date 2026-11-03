@@ -55,8 +55,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         '--exact-pmf',
         action='store_true',
-        help='For exact-likelihood models (AR/NF): enumerate the model PMF over the '
-        'support via log_prob instead of sampling. Noise-free JSD, comparable to mean_field.',
+        help='For autoregressive models, the only ones with an exact discrete likelihood: '
+        'enumerate the model PMF over the support via log_prob instead of sampling. '
+        'Noise-free JSD, comparable to mean_field.',
     )
     parser.add_argument('--exact-chunk', type=int, default=16384)
     return parser.parse_args()
@@ -151,7 +152,7 @@ def _logprob_chunk(model, z: jax.Array, states_chunk: jax.Array) -> jax.Array:
 def model_pmfs_exact(
     model, embed_data: np.ndarray, states: np.ndarray, args: argparse.Namespace
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Exact model PMF over the full support via log_prob (for AR/NF). No sampling noise."""
+    """Exact model PMF over the full support via log_prob (for AR). No sampling noise."""
     num_dists, support = embed_data.shape[0], states.shape[0]
     pmfs = np.zeros((num_dists, support))
     states_j = jnp.asarray(states.astype(np.float32))
@@ -316,8 +317,8 @@ def main() -> None:
                     family_key(args.eval_seed, fam_id), zlib.crc32(run_name.encode())
                 )
                 # Exact PMF only for models with an exact *discrete* likelihood (AR).
-                # DFM's log_prob is approximate; NF's is a continuous-density / dequant
-                # bound, not the discrete mass — both must use sampled JSD.
+                # DFM has no log_prob; NF's is a continuous-density / dequant bound,
+                # not the discrete mass — both must use sampled JSD.
                 if args.exact_pmf and cfg['model']['generator']['flow_type'] == 'ar':
                     pmfs, nan_rates = model_pmfs_exact(model, embed_data, states, args)
                 else:

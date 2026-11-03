@@ -76,6 +76,8 @@ def create_relational(config: ModelConfig, key: jax.Array) -> eqx.Module | None:
             d_e=emb.rel_d_e,
             key=key,
         )
+    if mode != 'learned':
+        raise ValueError(f'Unknown relational_mode: {mode!r}')
     return RelationalStream(
         num_variables=config.input_dim,
         num_classes=emb.num_classes,
@@ -91,8 +93,10 @@ def create_relational(config: ModelConfig, key: jax.Array) -> eqx.Module | None:
 def create_pools(config: ModelConfig, key: jax.Array) -> list[AttentionPool] | None:
     """One PMA readout per round when pool_type='attention'; None = weighted mean."""
     emb = config.embedding
-    if emb.pool_type != 'attention':
+    if emb.pool_type == 'mean':
         return None
+    if emb.pool_type != 'attention':
+        raise ValueError(f'Unknown pool_type: {emb.pool_type!r}')
     if emb.pool_num_queries != 1:
         raise NotImplementedError('pool_num_queries > 1 (rung 3) not yet wired through embed()')
     keys = jax.random.split(key, emb.num_rounds)
@@ -116,6 +120,8 @@ def create_embedding_blocks(
     key: jax.Array,
 ) -> list[PointwiseBlock | SetTransformerBlock]:
     emb = config.embedding
+    if emb.block_type not in ('pointwise', 'set_transformer'):
+        raise ValueError(f'Unknown block_type: {emb.block_type!r}')
 
     num_rounds = emb.num_rounds
 
@@ -169,10 +175,11 @@ def create_generative_network(
         if dequantize:
             raise NotImplementedError('Flow matching + dequant not implemented. Use DFM.')
         return create_fm_model(config, conditioning_dim=conditioning_dim, key=key)
-    else:
+    elif gen.flow_type == 'nf':
         return create_nf_model(
             config, conditioning_dim=conditioning_dim, dequantize=dequantize, key=key
         )
+    raise ValueError(f'Unknown flow_type: {gen.flow_type!r}')
 
 
 def create_fm_model(
@@ -254,7 +261,7 @@ def create_dfm_model(
             rel_node_dim=num_variables if config.embedding.rel_mode != 'none' else 0,
             key=key,
         )
-    else:
+    elif gen.dfm_denoiser == 'mlp':
         denoiser_net = create_discrete_denoiser_net(
             num_classes=num_classes,
             num_variables=num_variables,
@@ -265,6 +272,8 @@ def create_dfm_model(
             conditioning=gen.conditioning,
             key=key,
         )
+    else:
+        raise ValueError(f'Unknown dfm_denoiser: {gen.dfm_denoiser!r}')
 
     return DiscreteFlowMatchingModel(
         denoiser_net=denoiser_net,
@@ -466,7 +475,7 @@ def create_nf_model(
     if dequantize:
         if gen.nf_dequant_type == 'uniform':
             layers.append(UniformDequantize())
-        else:
+        elif gen.nf_dequant_type == 'learned':
             dequant_cond_dim = conditioning_dim if gen.nf_condition_dequant else 0
             layers.append(
                 create_dequantization_layer(
@@ -477,6 +486,8 @@ def create_nf_model(
                     key=dq_key,
                 )
             )
+        else:
+            raise ValueError(f'Unknown nf_dequant_type: {gen.nf_dequant_type!r}')
 
     for layer_key in keys:
         param_net = create_conditioned_mlp(
@@ -549,7 +560,7 @@ def create_conditioned_mlp(
             num_layers,
             key=key,
         )
-    else:
+    elif conditioning == 'concat':
         return ConcatMLP(
             input_dim + conditioning_dim,
             out_size,
@@ -557,3 +568,4 @@ def create_conditioned_mlp(
             num_layers,
             key=key,
         )
+    raise ValueError(f'Unknown conditioning: {conditioning!r}')

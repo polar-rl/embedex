@@ -329,19 +329,13 @@ class DiscreteFlowMatchingModel(flowee.Flow):
         params: jax.Array | None = None,
         key: jax.Array | None = None,
     ) -> tuple[jax.Array, jax.Array, jax.Array]:
-        """Approximate log-probability of `x` under the model.
+        """Not available: discrete flow matching has no tractable probability for a state.
 
-        Evaluates the denoiser on the clean data at `t` close to 1
-        (where the forward process produces essentially clean data) and
-        reads off the predicted log-probability.  This is a single-step
-        approximation; for tighter bounds use the ELBO.
+        Reading the denoiser on the clean state at `t` close to 1 is no substitute, because a
+        good denoiser returns that state with probability close to 1 whatever the state. Compare
+        generated samples instead.
         """
 
-        x_int = self._to_int(x)
-
-        t = jnp.array(1.0 - 1e-3)
-        logits = self.denoiser_net(x_int, t, sideinfo)
-        log_probs = jax.nn.log_softmax(logits, axis=-1)
-
-        log_p = jnp.sum(log_probs[jnp.arange(self.num_variables), x_int])
-        return log_p, 0.0, 0.0
+        raise NotImplementedError(
+            'Discrete flow matching has no tractable log-probability; compare generated samples'
+        )
