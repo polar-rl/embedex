@@ -236,7 +236,7 @@ def test_family_trains_end_to_end(family, make_config, tmp_path, monkeypatch, ke
     run_dir = Path(cfg.model_dir) / cfg.run_name
     assert [p.name for p in run_dir.iterdir()] == [f'{cfg.training.num_iterations}.eqx']
 
-    # The checkpoint rebuilds from its own saved config, as the paper figure scripts do.
+    # The checkpoint rebuilds from its own saved config.
     def build(saved: dict):
         saved_cfg = build_dataclass(family.config_cls, saved)
         return (

@@ -76,7 +76,7 @@ class CausalARNet(eqx.Module):
         h = self.pos_embeddings
         if sideinfo is not None:
             if self.rel_node_dim > 0:
-                # z = [mu ; Jhat(N*N)]; deliver [mu ; row_i] to node i's slot (node-aligned)
+                # z = [moments ; N x N relational block]; node i's slot gets [moments ; row i]
                 n = self.rel_node_dim
                 w = self.rel_node_width or n
                 mu = sideinfo[: self.moment_dim]

@@ -16,7 +16,7 @@ class Dequantize(Flow):
     feeding into the MLP, allowing distribution-dependent noise.
 
     Forward:  x_int → x_int + u,  ldj += -log q(u | x)
-    Inverse:  x_cont → floor(x_cont)
+    Inverse:  x_cont → round(x_cont)
     """
 
     net: eqx.nn.MLP

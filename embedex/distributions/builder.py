@@ -59,7 +59,7 @@ def create_model(config: ModelConfig, dequantize: bool, key: jax.Array) -> Distr
 
 
 def create_relational(config: ModelConfig, key: jax.Array) -> eqx.Module | None:
-    """Node-relational stream (TWO_AXIS); None unless embedding.rel_mode selects one.
+    """Node-relational stream; None unless embedding.rel_mode selects one.
 
     Every arm emits out_dim = N^2, so conditioning width does not move between them.
     """
@@ -98,7 +98,7 @@ def create_pools(config: ModelConfig, key: jax.Array) -> list[AttentionPool] | N
     if emb.pool_type != 'attention':
         raise ValueError(f'Unknown pool_type: {emb.pool_type!r}')
     if emb.pool_num_queries != 1:
-        raise NotImplementedError('pool_num_queries > 1 (rung 3) not yet wired through embed()')
+        raise NotImplementedError('pool_num_queries > 1 is not supported')
     keys = jax.random.split(key, emb.num_rounds)
     return [
         AttentionPool(

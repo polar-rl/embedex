@@ -27,7 +27,7 @@ BASELINES = ['kde', 'oracle']
 
 
 def is_main_grid_cell(cell: str) -> bool:
-    """Main-grid cell (the intended 4) or a baseline — not an _d/_r/_w ablation variant."""
+    """A main-grid cell or a baseline, not an _d/_r/_w ablation variant."""
     return cell in BASELINES or re.search(r'_(d|r|w)\d+$', cell) is None
 
 

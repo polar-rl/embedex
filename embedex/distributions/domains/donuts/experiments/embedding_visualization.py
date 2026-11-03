@@ -37,7 +37,7 @@ def run_embedding_visualization(
 
     embeddings_np = np.array(jnp.stack(embeddings))
 
-    # Guard against collapsed embeddings (e.g. variational posterior collapse)
+    # Guard against collapsed embeddings
     if np.std(embeddings_np) < 1e-8:
         print('  Warning: embeddings have near-zero variance — skipping visualization')
         return None

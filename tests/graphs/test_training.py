@@ -195,7 +195,7 @@ def test_family_trains_end_to_end(family, make_config, tmp_path, monkeypatch, ke
     run_dir = tmp_path / 'models' / cfg.run_name
     assert [p.name for p in run_dir.iterdir()] == [f'{cfg.training.num_iterations}.eqx']
 
-    # The checkpoint rebuilds from its own saved config, as the paper figure scripts do.
+    # The checkpoint rebuilds from its own saved config.
     embedding, head = load_ckpt(
         str(run_dir / f'{cfg.training.num_iterations}.eqx'),
         lambda saved: (

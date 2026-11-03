@@ -142,10 +142,8 @@ DOMAINS = (
     ),
 )
 
-# Generative models over continuous samples, and over categorical ones (where the normalizing
-# flow dequantizes its input).
+# Generative models over continuous samples.
 CONTINUOUS_FLOWS = ('nf', 'fm')
-DISCRETE_FLOWS = ('nf', 'dfm', 'ar')
 
 
 def tiny_model_config(
@@ -284,11 +282,6 @@ def block_type(request) -> str:
 
 @pytest.fixture(params=CONTINUOUS_FLOWS)
 def continuous_flow(request) -> str:
-    return request.param
-
-
-@pytest.fixture(params=DISCRETE_FLOWS)
-def discrete_flow(request) -> str:
     return request.param
 
 

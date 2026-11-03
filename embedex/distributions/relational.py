@@ -50,8 +50,8 @@ class EdgeAttn(eqx.Module):
 class LikelihoodGate(eqx.Module):
     """Per-(sample, variable) weights from per-sample likelihood features.
 
-    Variable i reads likelihood column `index[i]` (its own factor: the site's residual, the
-    ghost's match, or the one shared scalar) and gates sample s by sigmoid(a_i * l + b_i).
+    Variable i reads likelihood column `index[i]` (the feature of its own factor, or one feature
+    shared by every variable) and gates sample s by sigmoid(a_i * l + b_i).
     The weights are normalized over the samples for each variable, so with a scalar feature
     and a gate that closes on unlikely samples they are the posterior weights of the set;
     with no features every sample weighs the same.

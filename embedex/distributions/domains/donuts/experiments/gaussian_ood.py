@@ -68,7 +68,7 @@ def run_gaussian_ood(
     save_path: str,
     key: jax.Array,
 ) -> None:
-    # --- Part 1: Single Gaussians ---
+    # Single Gaussians
     gaussians_spec = [
         {'mean': jnp.array([0.0, 0.0]), 'cov': jnp.array([[0.3, 0.0], [0.0, 0.3]])},
         {'mean': jnp.array([1.5, 0.0]), 'cov': jnp.array([[0.1, 0.0], [0.0, 0.5]])},
@@ -95,6 +95,7 @@ def run_gaussian_ood(
 
     save_figure(fig, os.path.join(save_path, 'gaussian_ood_single.pdf'))
 
+    # Mixtures of two Gaussians
     mixture_params = [
         [
             {'mean': jnp.array([-1.2, 0.8]), 'cov': jnp.array([[0.15, 0.0], [0.0, 0.15]])},

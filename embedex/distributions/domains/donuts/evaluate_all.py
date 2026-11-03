@@ -68,7 +68,7 @@ def eval_model_chunk(
         z, _ = model.embed(emb)
         generated = model.generate(z, num_generated, key=gen_key)
         # Exact log-density path; the stochastic trace estimator is biased in
-        # probability space and inflates FM densities (see donuts/evaluate.py).
+        # probability space and inflates FM densities.
         log_probs, _, _ = model.log_prob(hold, z, key=None)
         nll = -jnp.mean(log_probs)
         swd = sliced_wasserstein_distance(ref, generated, NUM_SWD_PROJECTIONS, swd_key)
