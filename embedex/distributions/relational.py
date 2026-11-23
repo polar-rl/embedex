@@ -16,24 +16,26 @@ class EdgeAttn(eqx.Module):
     v: eqx.nn.Linear
     o: eqx.nn.Linear
     ebias: eqx.nn.Linear
+    evalue: eqx.nn.Linear
     ln1: eqx.nn.LayerNorm
     ff: eqx.nn.MLP
     ln2: eqx.nn.LayerNorm
     nh: int = eqx.field(static=True)
 
     def __init__(self, dm: int, de: int, nh: int, key: jax.Array) -> None:
-        ks = jax.random.split(key, 6)
+        ks = jax.random.split(key, 7)
         self.q = eqx.nn.Linear(dm, dm, key=ks[0])
         self.k = eqx.nn.Linear(dm, dm, key=ks[1])
         self.v = eqx.nn.Linear(dm, dm, key=ks[2])
         self.o = eqx.nn.Linear(dm, dm, key=ks[3])
         self.ebias = eqx.nn.Linear(de, nh, key=ks[4])
+        self.evalue = eqx.nn.Linear(2 * de, dm, key=ks[5])
         self.ln1 = eqx.nn.LayerNorm(dm)
-        self.ff = eqx.nn.MLP(dm, dm, 2 * dm, 1, key=ks[5])
+        self.ff = eqx.nn.MLP(dm, dm, 2 * dm, 1, key=ks[6])
         self.ln2 = eqx.nn.LayerNorm(dm)
         self.nh = nh
 
-    def __call__(self, h: jax.Array, R: jax.Array) -> jax.Array:
+    def __call__(self, h: jax.Array, R: jax.Array, Rv: jax.Array) -> jax.Array:
         N, dm = h.shape
         hd = dm // self.nh
         Q = jax.vmap(self.q)(h).reshape(N, self.nh, hd).transpose(1, 0, 2)
@@ -42,7 +44,10 @@ class EdgeAttn(eqx.Module):
         bias = jax.vmap(jax.vmap(self.ebias))(R).transpose(2, 0, 1)  # (nh, N, N)
         logits = jnp.matmul(Q, K.transpose(0, 2, 1)) / jnp.sqrt(hd) + bias
         a = jax.nn.softmax(logits, axis=-1)
-        out = jnp.matmul(a, V).transpose(1, 0, 2).reshape(N, dm)
+        Ev = jax.vmap(jax.vmap(self.evalue))(Rv)
+        Ev = Ev.reshape(N, N, self.nh, hd).transpose(2, 0, 1, 3)  # (nh, N, N, hd)
+        out = jnp.matmul(a, V) + jnp.einsum('hjk,hjkd->hjd', a, Ev)  # (nh, N, hd)
+        out = out.transpose(1, 0, 2).reshape(N, dm)
         h = jax.vmap(self.ln1)(h + jax.vmap(self.o)(out))
         return jax.vmap(self.ln2)(h + jax.vmap(self.ff)(h))
 
@@ -176,6 +181,7 @@ class RelationalStream(eqx.Module):
     cell_embed: jax.Array
     Rproj: eqx.nn.Linear
     node_init: eqx.nn.Linear
+    value_embed: jax.Array
     blocks: list
     gate: LikelihoodGate
     num_variables: int = eqx.field(static=True)
@@ -186,13 +192,14 @@ class RelationalStream(eqx.Module):
     def __init__(
         self, num_variables, num_classes, d_e, num_layers, num_heads, key, node_dim=0, index=None
     ):
-        ks = jax.random.split(key, num_layers + 3)
+        ks = jax.random.split(key, num_layers + 4)
         dm = node_dim or num_variables
         nh = _largest_divisor_leq(dm, num_heads)
         self.cell_embed = jax.random.normal(ks[0], (num_classes, d_e)) * 0.1
         self.Rproj = eqx.nn.Linear(d_e * d_e, d_e, key=ks[1])
         self.node_init = eqx.nn.Linear(d_e, dm, key=ks[2])
-        self.blocks = [EdgeAttn(dm, d_e, nh, ks[3 + i]) for i in range(num_layers)]
+        self.value_embed = jax.random.normal(ks[3], (num_variables, d_e)) * 0.1
+        self.blocks = [EdgeAttn(dm, d_e, nh, ks[4 + i]) for i in range(num_layers)]
         self.gate = LikelihoodGate(num_variables, index)
         self.num_variables = num_variables
         self.num_classes = num_classes
@@ -211,6 +218,8 @@ class RelationalStream(eqx.Module):
         R = jnp.einsum('sij,sid,sje->ijde', pair_weights(w), e, e)
         Rp = jax.vmap(jax.vmap(self.Rproj))(R.reshape(N, N, -1))
         h = jax.vmap(self.node_init)(jnp.sum(e * w[:, :, None], axis=0))
+        P = jnp.broadcast_to(self.value_embed[None], (N, N, self.d_e))
+        Rv = jnp.concatenate([Rp, P], axis=-1)  # value term reads [kappa_jk; P_k]
         for blk in self.blocks:
-            h = blk(h, Rp)
+            h = blk(h, Rp, Rv)
         return h.reshape(-1)

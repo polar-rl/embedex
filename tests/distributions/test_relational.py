@@ -85,11 +85,14 @@ class TestStreams:
         np.testing.assert_allclose(stream(jnp.tile(states, (2, 1))), stream(states), atol=1e-5)
 
     def test_relabeling_the_variables_relabels_the_output(self, make_stream, mode, states):
-        # Nothing in a stream tells the variables apart, so permuting them permutes the rows of
-        # the output (and, for the pairwise arms, its columns too).
+        # Only the learned variable embeddings tell the variables apart, so permuting the
+        # variables and those embeddings permutes the rows of the output (and, for the pairwise
+        # arms, its columns too).
         stream = make_stream(mode)
         perm = jnp.array([4, 2, 0, 5, 1, 3])
         out = stream(states).reshape(NUM_VARIABLES, -1)
+        if mode == 'learned':
+            stream = eqx.tree_at(lambda s: s.value_embed, stream, stream.value_embed[perm])
 
         permuted = stream(states[:, perm]).reshape(NUM_VARIABLES, -1)
 
@@ -181,6 +184,42 @@ def closed(gate: LikelihoodGate) -> LikelihoodGate:
 
     n = gate.num_variables
     return eqx.tree_at(lambda g: (g.a, g.b), gate, (jnp.ones(n), jnp.full(n, 15.0)))
+
+
+def balanced_pair_sets(num_variables: int, key: jax.Array) -> dict[str, jax.Array]:
+    """Binary sets in which every variable is 1 in exactly half the samples, so all variable
+    summaries coincide: pairs (0,1), (2,3), ... co-occurring or exclusive, and a re-pairing."""
+
+    half = jnp.concatenate([jnp.ones(32), jnp.zeros(32)])
+    keys = jax.random.split(key, num_variables // 2)
+    a = jnp.stack([jax.random.permutation(k, half) for k in keys], axis=1)
+    co = jnp.repeat(a, 2, axis=1)
+    exclusive = jnp.stack([a, 1 - a], axis=2).reshape(64, -1)
+    repaired = jnp.concatenate([co[:, 0::2], co[:, 1::2]], axis=1)  # pairs (0, D/2), (1, D/2+1)..
+    return {'co': co, 'exclusive': exclusive, 'repaired': repaired}
+
+
+class TestValueTerm:
+    """The attention values carry [edge feature ; variable embedding], so the pairs reach the
+    output even when every variable summary coincides."""
+
+    def test_equal_marginals_still_show_pair_type_and_partner(self, make_stream, key):
+        # Every variable summary coincides here, so without the value term the three sets would
+        # give the same output up to float noise (~1e-7).
+        stream = make_stream('learned', num_variables=4, num_classes=2)
+
+        out = {name: stream(xs) for name, xs in balanced_pair_sets(4, key).items()}
+
+        assert jnp.max(jnp.abs(out['exclusive'] - out['co'])) > 1e-4
+        assert jnp.max(jnp.abs(out['repaired'] - out['co'])) > 1e-4
+
+    def test_gradients_reach_the_value_term(self, make_stream, states):
+        stream = make_stream('learned')
+
+        grads = eqx.filter_grad(lambda s: jnp.sum(s(states) ** 2))(stream)
+
+        assert jnp.any(grads.value_embed != 0)
+        assert all(jnp.any(block.evalue.weight != 0) for block in grads.blocks)
 
 
 class TestModeAlias:
